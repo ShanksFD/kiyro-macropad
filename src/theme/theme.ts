@@ -1,0 +1,275 @@
+'use client';
+
+import { createTheme, type Theme } from '@mui/material/styles';
+import { duration, easing, palette, radius } from './tokens';
+
+/**
+ * Device-visual tokens live inside the palette so MUI generates CSS variables
+ * for them and they follow the active colour scheme automatically.
+ */
+declare module '@mui/material/styles' {
+  interface Palette {
+    device: DevicePalette;
+  }
+  interface PaletteOptions {
+    device?: DevicePalette;
+  }
+}
+
+export interface DevicePalette {
+  /** The macro pad body. */
+  chassis: string;
+  chassisEdge: string;
+  /** Resting keycap face + its lower bevel. */
+  keycap: string;
+  keycapEdge: string;
+  keycapHover: string;
+  /** Keycap that carries a binding. */
+  keycapAssigned: string;
+  /** Keycap currently selected in the editor. */
+  keycapSelected: string;
+  /** Keycap lit by a live hardware event. */
+  keycapLive: string;
+  legend: string;
+  legendMuted: string;
+}
+
+const deviceDark: DevicePalette = {
+  chassis: '#171C24',
+  chassisEdge: '#0A0D11',
+  keycap: '#242C37',
+  keycapEdge: '#141A22',
+  keycapHover: '#2C3542',
+  keycapAssigned: '#2A3644',
+  keycapSelected: palette.accent.dark,
+  keycapLive: palette.accent.main,
+  legend: '#E6EAF0',
+  legendMuted: '#8B95A3',
+};
+
+const deviceLight: DevicePalette = {
+  chassis: '#E7EAEF',
+  chassisEdge: '#C9CFD8',
+  keycap: '#FFFFFF',
+  keycapEdge: '#CBD2DB',
+  keycapHover: '#F4F7FB',
+  keycapAssigned: '#EEF4FE',
+  keycapSelected: palette.accent.main,
+  keycapLive: palette.accent.main,
+  legend: '#141A22',
+  legendMuted: '#5E6875',
+};
+
+const fontStack = 'var(--font-sans), "Segoe UI", system-ui, -apple-system, sans-serif';
+
+export const monoFontFamily =
+  'var(--font-mono), "SFMono-Regular", ui-monospace, Consolas, monospace';
+
+/** `theme.vars` only exists when CSS variables are enabled; this keeps call sites terse. */
+export const vars = (t: Theme) => t.vars ?? t;
+
+export const theme = createTheme({
+  cssVariables: { colorSchemeSelector: 'class' },
+  defaultColorScheme: 'dark',
+  colorSchemes: {
+    dark: {
+      palette: {
+        mode: 'dark',
+        primary: {
+          main: palette.accent.main,
+          dark: palette.accent.dark,
+          light: palette.accent.light,
+          contrastText: '#04121F',
+        },
+        success: palette.success,
+        warning: palette.warning,
+        error: palette.error,
+        info: palette.info,
+        background: { default: palette.neutral[950], paper: palette.neutral[900] },
+        text: { primary: '#E9EDF2', secondary: '#98A2B0', disabled: '#5E6875' },
+        divider: 'rgba(255, 255, 255, 0.10)',
+        action: { hover: 'rgba(255, 255, 255, 0.05)', selected: 'rgba(46, 144, 250, 0.16)' },
+        device: deviceDark,
+      },
+    },
+    light: {
+      palette: {
+        mode: 'light',
+        primary: {
+          main: palette.accent.inkOnLight,
+          dark: '#0A4E96',
+          light: palette.accent.main,
+          contrastText: '#FFFFFF',
+        },
+        success: palette.success,
+        warning: palette.warning,
+        error: palette.error,
+        info: palette.info,
+        background: { default: palette.neutral[50], paper: palette.neutral[0] },
+        text: {
+          primary: palette.neutral[900],
+          secondary: palette.neutral[500],
+          disabled: palette.neutral[400],
+        },
+        divider: 'rgba(17, 20, 25, 0.10)',
+        action: { hover: 'rgba(17, 20, 25, 0.04)', selected: 'rgba(15, 95, 184, 0.10)' },
+        device: deviceLight,
+      },
+    },
+  },
+  shape: { borderRadius: radius.md },
+  spacing: 4,
+  transitions: {
+    duration: {
+      shortest: duration.instant,
+      shorter: duration.fast,
+      short: duration.base,
+      standard: duration.base,
+      complex: duration.slow,
+    },
+    easing: { easeOut: easing.out, easeInOut: easing.inOut },
+  },
+  typography: {
+    fontFamily: fontStack,
+    h1: { fontSize: '1.75rem', fontWeight: 650, letterSpacing: '-0.02em', lineHeight: 1.2 },
+    h2: { fontSize: '1.375rem', fontWeight: 640, letterSpacing: '-0.015em', lineHeight: 1.25 },
+    h3: { fontSize: '1.0625rem', fontWeight: 620, letterSpacing: '-0.01em', lineHeight: 1.35 },
+    h4: { fontSize: '0.9375rem', fontWeight: 620, letterSpacing: '-0.005em' },
+    subtitle2: { fontSize: '0.8125rem', fontWeight: 600, letterSpacing: 0 },
+    body1: { fontSize: '0.875rem', lineHeight: 1.6 },
+    body2: { fontSize: '0.8125rem', lineHeight: 1.55 },
+    caption: { fontSize: '0.75rem', lineHeight: 1.45 },
+    overline: {
+      fontSize: '0.6875rem',
+      fontWeight: 600,
+      letterSpacing: '0.09em',
+      textTransform: 'uppercase',
+      lineHeight: 1.6,
+    },
+    button: { fontSize: '0.8125rem', fontWeight: 600, textTransform: 'none', letterSpacing: 0 },
+  },
+  components: {
+    MuiCssBaseline: {
+      styleOverrides: {
+        body: { WebkitFontSmoothing: 'antialiased' },
+        '*::-webkit-scrollbar': { width: 10, height: 10 },
+        '*::-webkit-scrollbar-thumb': {
+          borderRadius: radius.pill,
+          backgroundColor: 'rgba(128, 138, 152, 0.35)',
+          border: '3px solid transparent',
+          backgroundClip: 'content-box',
+        },
+        '*::-webkit-scrollbar-track': { background: 'transparent' },
+        '@media (prefers-reduced-motion: reduce)': {
+          '*, *::before, *::after': {
+            animationDuration: '0.01ms !important',
+            transitionDuration: '0.01ms !important',
+          },
+        },
+      },
+    },
+    MuiPaper: {
+      defaultProps: { elevation: 0 },
+      styleOverrides: {
+        root: ({ theme: t }) => ({
+          backgroundImage: 'none',
+          borderRadius: radius.lg,
+          '&.MuiPaper-outlined': { borderColor: vars(t).palette.divider },
+        }),
+      },
+    },
+    MuiButton: {
+      defaultProps: { disableElevation: true, disableRipple: true, size: 'small' },
+      styleOverrides: {
+        root: { borderRadius: radius.md, paddingInline: 14, minHeight: 34 },
+        sizeSmall: { minHeight: 32, paddingInline: 12 },
+        sizeLarge: { minHeight: 42, paddingInline: 20, fontSize: '0.875rem' },
+        outlined: ({ theme: t }) => ({
+          borderColor: vars(t).palette.divider,
+          color: vars(t).palette.text.primary,
+          '&:hover': {
+            borderColor: vars(t).palette.text.disabled,
+            backgroundColor: vars(t).palette.action.hover,
+          },
+        }),
+      },
+    },
+    MuiIconButton: {
+      defaultProps: { size: 'small' },
+      styleOverrides: { root: { borderRadius: radius.sm } },
+    },
+    MuiChip: {
+      defaultProps: { size: 'small' },
+      styleOverrides: {
+        root: { borderRadius: radius.sm, fontWeight: 550, height: 24 },
+        label: { paddingInline: 8 },
+        outlined: ({ theme: t }) => ({ borderColor: vars(t).palette.divider }),
+      },
+    },
+    MuiTooltip: {
+      defaultProps: { arrow: true, enterDelay: 350 },
+      styleOverrides: {
+        tooltip: { borderRadius: radius.sm, fontSize: '0.75rem', padding: '6px 10px' },
+      },
+    },
+    MuiDialog: {
+      styleOverrides: {
+        paper: ({ theme: t }) => ({ border: `1px solid ${vars(t).palette.divider}` }),
+      },
+    },
+    MuiDialogTitle: {
+      styleOverrides: { root: { fontSize: '1rem', fontWeight: 620, padding: '20px 20px 8px' } },
+    },
+    MuiDialogContent: { styleOverrides: { root: { padding: '8px 20px' } } },
+    MuiDialogActions: { styleOverrides: { root: { padding: 16, gap: 8 } } },
+    MuiDrawer: {
+      styleOverrides: {
+        paper: ({ theme: t }) => ({
+          backgroundImage: 'none',
+          borderColor: vars(t).palette.divider,
+        }),
+      },
+    },
+    MuiTextField: { defaultProps: { size: 'small' } },
+    MuiSelect: { defaultProps: { size: 'small' } },
+    MuiOutlinedInput: {
+      styleOverrides: {
+        root: ({ theme: t }) => ({
+          borderRadius: radius.md,
+          '& .MuiOutlinedInput-notchedOutline': { borderColor: vars(t).palette.divider },
+        }),
+      },
+    },
+    MuiTabs: {
+      styleOverrides: {
+        root: { minHeight: 38 },
+        indicator: { height: 2, borderRadius: radius.pill },
+      },
+    },
+    MuiTab: {
+      styleOverrides: {
+        root: {
+          minHeight: 38,
+          textTransform: 'none',
+          fontWeight: 600,
+          fontSize: '0.8125rem',
+          padding: '6px 12px',
+        },
+      },
+    },
+    MuiListItemButton: { styleOverrides: { root: { borderRadius: radius.md, paddingBlock: 7 } } },
+    MuiListItemIcon: { styleOverrides: { root: { minWidth: 30 } } },
+    MuiAlert: { styleOverrides: { root: { borderRadius: radius.md, fontSize: '0.8125rem' } } },
+    MuiDivider: {
+      styleOverrides: { root: ({ theme: t }) => ({ borderColor: vars(t).palette.divider }) },
+    },
+    MuiMenu: {
+      styleOverrides: {
+        paper: ({ theme: t }) => ({ border: `1px solid ${vars(t).palette.divider}` }),
+      },
+    },
+    MuiMenuItem: { styleOverrides: { root: { fontSize: '0.8125rem', minHeight: 34 } } },
+    MuiSwitch: { defaultProps: { size: 'small' } },
+    MuiSnackbar: { defaultProps: { anchorOrigin: { vertical: 'bottom', horizontal: 'right' } } },
+  },
+});

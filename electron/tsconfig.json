@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "outDir": "../dist-electron",
+    "rootDir": "..",
+    "types": ["node", "w3c-web-serial"],
+    "paths": {
+      "@/*": ["../src/*"]
+    }
+  },
+  "include": ["**/*.ts", "../src/lib/protocol/**/*.ts", "../src/lib/devices/**/*.ts", "../src/lib/actions/**/*.ts", "../src/lib/execution/**/*.ts", "../src/lib/profiles/**/*.ts", "../src/lib/electron/**/*.ts"],
+  "exclude": ["node_modules"]
+}
