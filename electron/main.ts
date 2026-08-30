@@ -17,13 +17,21 @@
  * app; only the tray's "Quit Kiyro" (or an OS-level quit) actually tears
  * everything down. `isQuitting` is what tells the window's `close` handler
  * which of those is happening.
+ *
+ * Single instance: hide-instead-of-quit makes it easy to forget an old
+ * instance is still alive in the tray and launch a second one on top of it.
+ * Two instances both opening the same COM port is fatal — Windows serial
+ * ports are exclusive, so the second instance's connect attempts just fail
+ * as "busy" forever, retrying every couple seconds. `requestSingleInstanceLock`
+ * below prevents that: a second launch quits itself immediately and asks the
+ * first instance to show its window instead.
  */
 
 import { app, BrowserWindow, Menu } from 'electron';
 import type { Tray } from 'electron';
 import path from 'node:path';
 import { buildAppMenu } from './menu';
-import { createTray } from './tray';
+import { createTray, setTrayConnected } from './tray';
 import { ExecutionPipeline } from './execution-pipeline';
 import { registerIpcHandlers } from './ipc-handlers';
 
@@ -125,45 +133,67 @@ async function createWindow(): Promise<void> {
   }
 }
 
-app.whenReady().then(() => {
-  Menu.setApplicationMenu(buildAppMenu());
-
-  const pipeline = new ExecutionPipeline(() => mainWindow);
-  registerIpcHandlers(pipeline);
-  void createWindow();
-
-  tray = createTray({
-    onOpen: () => {
-      if (mainWindow) showWindow();
-      else void createWindow();
-    },
-    onQuit: () => {
-      console.log('[kiyro] quitting (tray)');
-      isQuitting = true;
-      app.quit();
-    },
-  });
-
-  app.on('activate', () => {
-    // macOS convention: clicking the dock icon reopens the window even
-    // though the app (and its tray icon) stayed running while hidden.
+// Must run before anything touches the serial port. If another instance
+// already holds the lock, this call returns false and we quit immediately —
+// none of the code below (which opens COM3) ever runs for this process.
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    // Another launch attempt happened while we're already running — surface
+    // our window instead of letting a second process fight us for the port.
     if (mainWindow) showWindow();
     else void createWindow();
   });
 
-  // Covers every path to quitting, not just the tray's — an OS-level quit
-  // (shutdown, Cmd+Q, task manager "End task" going through a clean exit)
-  // must also let the window actually close instead of just hiding.
-  app.on('before-quit', () => {
-    isQuitting = true;
-  });
+  app.whenReady().then(() => {
+    Menu.setApplicationMenu(buildAppMenu());
 
-  app.on('window-all-closed', () => {
-    // Reached only once a real quit already tore the window down (hiding it
-    // never fires this) — the pipeline shutting down here, redundantly with
-    // the tray's own `onQuit`, is what guarantees COM3 is released however
-    // the app happened to exit.
-    pipeline.stop();
-    if (process.platform !== 'darwin') app.quit();
+    const pipeline = new ExecutionPipeline(() => mainWindow);
+    registerIpcHandlers(pipeline);
+    void createWindow();
+
+    tray = createTray({
+      onOpen: () => {
+        if (mainWindow) showWindow();
+        else void createWindow();
+      },
+      onQuit: () => {
+        console.log('[kiyro] quitting (tray)');
+        isQuitting = true;
+        app.quit();
+      },
+    });
+
+    // Keep the tray icon reflecting live connection state, so it's visible
+    // without opening the window at all — relevant given how often COM3 has
+    // been dropping in this environment.
+    pipeline.bridge.onStateChange((state) => {
+      if (tray) setTrayConnected(tray, state.status === 'connected');
+    });
+
+    app.on('activate', () => {
+      // macOS convention: clicking the dock icon reopens the window even
+      // though the app (and its tray icon) stayed running while hidden.
+      if (mainWindow) showWindow();
+      else void createWindow();
+    });
+
+    // Covers every path to quitting, not just the tray's — an OS-level quit
+    // (shutdown, Cmd+Q, task manager "End task" going through a clean exit)
+    // must also let the window actually close instead of just hiding.
+    app.on('before-quit', () => {
+      isQuitting = true;
+    });
+
+    app.on('window-all-closed', () => {
+      // Reached only once a real quit already tore the window down (hiding it
+      // never fires this) — the pipeline shutting down here, redundantly with
+      // the tray's own `onQuit`, is what guarantees COM3 is released however
+      // the app happened to exit.
+      pipeline.stop();
+      if (process.platform !== 'darwin') app.quit();
+    });
   });
-});
+}

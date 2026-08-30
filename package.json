@@ -15,7 +15,9 @@
     "test:watch": "vitest",
     "format": "prettier --write .",
     "build:electron": "tsc -p electron/tsconfig.json",
-    "electron:dev": "concurrently -k \"next dev\" \"wait-on http://localhost:3000 && npm run build:electron && electron .\""
+    "electron:dev": "concurrently -k \"next dev\" \"wait-on http://localhost:3000 && npm run build:electron && electron .\"",
+    "dist:win": "npm run build && npm run build:electron && electron-builder --win",
+    "dist:mac": "npm run build && npm run build:electron && electron-builder --mac"
   },
   "dependencies": {
     "@emotion/cache": "^11.14.0",
@@ -40,6 +42,7 @@
     "@types/w3c-web-serial": "^1.0.8",
     "concurrently": "^9.1.0",
     "electron": "^33.2.0",
+    "electron-builder": "^26.15.3",
     "eslint": "^9.39.5",
     "eslint-config-next": "^16.3.3",
     "eslint-config-prettier": "^10.1.8",
@@ -47,5 +50,43 @@
     "typescript": "^5.9.3",
     "vitest": "^4.1.11",
     "wait-on": "^8.0.1"
+  },
+  "build": {
+    "appId": "com.kiyro.macropad",
+    "productName": "Kiyro",
+    "directories": {
+      "output": "dist-installer"
+    },
+    "files": [
+      "dist-electron/**/*",
+      "out/**/*",
+      "package.json",
+      "!**/*.map"
+    ],
+    "asarUnpack": [
+      "**/*.node",
+      "node_modules/koffi/**",
+      "node_modules/@serialport/bindings-cpp/**"
+    ],
+    "win": {
+      "icon": "electron/assets/icon.ico",
+      "target": ["nsis"]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Kiyro"
+    },
+    "mac": {
+      "icon": "electron/assets/icon.icns",
+      "category": "public.app-category.utilities",
+      "target": ["dmg"]
+    },
+    "dmg": {
+      "icon": "electron/assets/icon.icns"
+    }
   }
 }
