@@ -5,10 +5,19 @@
  * usual Next.js hot-reload workflow keeps working — `npm run electron:dev`
  * starts both together and waits for the server before launching this.
  *
- * A packaged build would instead load the static export
- * (`next.config.ts`'s `output: 'export'`) from `out/index.html` via
- * `file://` — that branch is written but not exercised here; packaging
- * itself is out of scope for this pass.
+ * A packaged build loads the static export (`next.config.ts`'s
+ * `output: 'export'`) through a custom `app://` protocol registered below —
+ * NOT `file://`. Next's static export always emits root-absolute asset URLs
+ * (`/_next/static/...` for every JS/CSS/font file, regardless of
+ * `assetPrefix`), which resolve fine over `http://` but break under
+ * `file://`, where a root-absolute path means the OS filesystem root, not
+ * the site root — e.g. `C:\_next\static\...` instead of `out\_next\static\...`.
+ * The symptom is a silent, mostly-invisible failure: every asset 404s, but
+ * the browser just falls back to system fonts / unstyled content instead of
+ * erroring loudly, so this is easy to miss without actually testing a
+ * packaged build. `app://` sidesteps it entirely by mapping every request's
+ * pathname onto a file under `out/` ourselves, so `/_next/...` resolves
+ * against `out/_next/...` correctly.
  *
  * Background/tray mode: the macro pad must keep working with no window
  * open, since the main process — not the window — owns the serial
@@ -27,15 +36,44 @@
  * first instance to show its window instead.
  */
 
-import { app, BrowserWindow, Menu } from 'electron';
+import { app, BrowserWindow, Menu, net, protocol } from 'electron';
 import type { Tray } from 'electron';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { buildAppMenu } from './menu';
 import { createTray, setTrayConnected } from './tray';
 import { ExecutionPipeline } from './execution-pipeline';
 import { registerIpcHandlers } from './ipc-handlers';
 
 const DEV_SERVER_URL = 'http://localhost:3000';
+const APP_SCHEME = 'app';
+const OUT_DIR = path.join(__dirname, '../../out');
+
+// Must be called before `app` is ready. `standard: true` is what makes
+// root-absolute paths (`/_next/...`) resolve against this scheme's origin
+// instead of erroring — the same behaviour `http://` gives Next's static
+// export for free.
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: APP_SCHEME,
+    privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true },
+  },
+]);
+
+/**
+ * Maps a request pathname onto a file in `out/`. The static export writes
+ * each route as a flat `<route>.html` (e.g. `out/configure.html`, not
+ * `out/configure/index.html` — see `next.config.ts`, `trailingSlash` is
+ * left at its default `false`), and asset paths already carry a real
+ * extension, so only extension-less pathnames need `.html` appended.
+ */
+function resolveOutPath(pathname: string): string {
+  const decoded = decodeURIComponent(pathname);
+  if (decoded === '/' || decoded === '') return 'index.html';
+  const trimmed = decoded.replace(/^\/+/, '');
+  const lastSegment = trimmed.split('/').pop() ?? '';
+  return lastSegment.includes('.') ? trimmed : `${trimmed}.html`;
+}
 
 /** Passed by a launcher (e.g. a "start with Windows" login item) that wants Kiyro running without the GUI popping up. */
 const START_HIDDEN = process.argv.includes('--hidden');
@@ -127,7 +165,7 @@ async function createWindow(): Promise<void> {
   });
 
   if (app.isPackaged) {
-    await window.loadFile(path.join(__dirname, '../../out/index.html'));
+    await window.loadURL(`${APP_SCHEME}://kiyro/index.html`);
   } else {
     await loadDevServer(window);
   }
@@ -148,6 +186,15 @@ if (!gotSingleInstanceLock) {
   });
 
   app.whenReady().then(() => {
+    // Only ever hit for a packaged build (`app://kiyro/...`, per `loadURL`
+    // above) — dev mode loads `http://localhost:3000` directly and never
+    // touches this handler.
+    protocol.handle(APP_SCHEME, (request) => {
+      const url = new URL(request.url);
+      const filePath = path.join(OUT_DIR, resolveOutPath(url.pathname));
+      return net.fetch(pathToFileURL(filePath).toString());
+    });
+
     Menu.setApplicationMenu(buildAppMenu());
 
     const pipeline = new ExecutionPipeline(() => mainWindow);

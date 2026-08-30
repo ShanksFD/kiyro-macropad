@@ -78,7 +78,9 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Kiyro"
+      "shortcutName": "Kiyro",
+      "artifactName": "${productName} Setup.${ext}",
+      "uninstallDisplayName": "${productName}"
     },
     "mac": {
       "icon": "electron/assets/icon.icns",
