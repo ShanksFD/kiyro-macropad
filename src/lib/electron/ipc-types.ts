@@ -8,6 +8,7 @@ import type { DeviceEvent } from '../protocol/types';
 import type { EventResolution } from '../devices/types';
 import type { ExecutionOutcome } from '../execution/executor';
 import type { MacroProfile } from '../profiles/types';
+import type { Preferences } from '../preferences/schema';
 
 /**
  * The IPC contract between Electron's main process and Kiyro's renderer.
@@ -30,6 +31,8 @@ export const IpcChannel = {
   ProfilesReplaceAll: 'kiyro:profiles:replace-all',
   ProfilesGetActive: 'kiyro:profiles:get-active',
   ProfilesSetActive: 'kiyro:profiles:set-active',
+  PreferencesGet: 'kiyro:preferences:get',
+  PreferencesSet: 'kiyro:preferences:set',
 } as const;
 
 /** Pushed from main whenever the real serial connection's state changes. */
@@ -83,6 +86,10 @@ export interface KiyroBridge {
     replaceAll(profiles: MacroProfile[]): Promise<void>;
     getActiveId(): Promise<string | null>;
     setActiveId(id: string | null): Promise<void>;
+  };
+  preferences: {
+    get(): Promise<Preferences | null>;
+    set(preferences: Preferences): Promise<void>;
   };
   setActiveBindings(payload: SetActiveProfilePayload): Promise<void>;
 }

@@ -59,15 +59,34 @@ export const useProfileStore = create<ProfileStore>((set, get) => ({
   activeProfileId: null,
 
   hydrate: async (device) => {
-    if (get().hydrated) return;
+    if (get().hydrated) {
+      console.log('[kiyro][diag] hydrate() called again but already hydrated — skipped');
+      return;
+    }
+
+    const usingElectron = getProfileRepository() === electronProfiles;
+    console.log(`[kiyro][diag] hydrate() starting, repository=${usingElectron ? 'electron' : 'localStorage'}`);
 
     const stored = await getProfileRepository().list();
+    // TEMP DIAGNOSTIC (1): profiles loaded, straight from the repository.
+    console.log(
+      `[kiyro][diag] profiles loaded: count=${stored.length} ids=[${stored.map((p) => p.id).join(', ')}]`,
+    );
+
     const profiles = stored.length > 0 ? stored : [createDefaultProfile(device)];
     if (stored.length === 0) persist(profiles);
 
     const storedActive = await readActiveId();
     const activeProfileId =
       profiles.find((profile) => profile.id === storedActive)?.id ?? profiles[0]?.id ?? null;
+    // TEMP DIAGNOSTIC (2): the resolved active profile id vs. what was on disk.
+    console.log(`[kiyro][diag] resolved activeProfileId=${activeProfileId} (storedActive was ${storedActive})`);
+
+    // `storedActive` can be missing or stale (first run, or it pointed at a
+    // profile that no longer exists) — whenever the resolved id differs from
+    // what's on disk, write it back so the fallback choice itself becomes
+    // "the" active profile for next launch, not just for this session.
+    if (activeProfileId !== storedActive) writeActiveId(activeProfileId);
 
     set({ hydrated: true, profiles, activeProfileId });
   },

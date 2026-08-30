@@ -82,7 +82,7 @@ export function SettingsView() {
       <Stack spacing={1}>
         <Typography variant="h1">Settings</Typography>
         <Typography variant="body2" color="text.secondary">
-          Preferences are stored in this browser only.
+          Preferences are stored on this computer only.
         </Typography>
       </Stack>
 

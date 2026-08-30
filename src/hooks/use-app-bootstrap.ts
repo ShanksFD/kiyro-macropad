@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { EncoderNormalizer } from '@/lib/devices/encoder-normalizer';
 import { DEFAULT_DEVICE, resolveEvent } from '@/lib/devices/registry';
 import { actionExecutor } from '@/lib/execution/executor';
@@ -13,11 +13,61 @@ import { useLiveInputStore } from '@/stores/live-input-store';
 import { useActiveProfile, useProfileStore } from '@/stores/profile-store';
 import { useQuickActionsStore } from '@/stores/quick-actions-store';
 import { useUiStore } from '@/stores/ui-store';
+import type { MacroProfile } from '@/lib/profiles/types';
 
 let wired = false;
 
 function isElectron(): boolean {
   return typeof window !== 'undefined' && Boolean(window.kiyro);
+}
+
+/**
+ * Sends the given profile's bindings to Electron's main process so its
+ * in-memory `ActiveProfileStore` (`electron/resolve-control.ts`) has
+ * something to look up when a physical button is pressed — deduped by
+ * `id:updatedAt` so an unchanged profile is never re-sent.
+ *
+ * Module-level, not a `useRef`: this is called both imperatively (once,
+ * right after hydration — see the mount effect below) and reactively (on
+ * every later profile change), and both call sites need to share one dedup
+ * marker regardless of render timing.
+ */
+let lastPushedSignature: string | null = null;
+
+function pushActiveProfileToElectron(profile: MacroProfile | null): void {
+  // TEMP DIAGNOSTIC (4): whether this even runs, and why it might bail out
+  // early — every branch below is logged so a silent no-op is impossible to
+  // miss.
+  const electronPresent = isElectron();
+  if (!electronPresent || !profile) {
+    console.log(
+      `[kiyro][diag] pushActiveProfileToElectron: skipped (window.kiyro present=${electronPresent}, profile=${profile ? profile.id : 'null'})`,
+    );
+    return;
+  }
+
+  const signature = `${profile.id}:${profile.updatedAt}`;
+  if (lastPushedSignature === signature) {
+    console.log(`[kiyro][diag] pushActiveProfileToElectron: already pushed this exact signature (${signature}), skipping`);
+    return;
+  }
+
+  console.log(
+    `[kiyro][diag] pushActiveProfileToElectron: calling setActiveBindings for profileId=${profile.id} bindingKeys=[${Object.keys(profile.bindings).join(', ')}]`,
+  );
+
+  window.kiyro
+    ?.setActiveBindings({ profileId: profile.id, updatedAt: profile.updatedAt, bindings: profile.bindings })
+    .then(() => {
+      lastPushedSignature = signature;
+      console.log(`[kiyro][diag] pushActiveProfileToElectron: setActiveBindings resolved OK for ${profile.id}`);
+    })
+    .catch((error: unknown) => {
+      // Left un-pushed: the next call (next profile change, or the next
+      // mount) retries, since the signature never got recorded as sent.
+      console.error('[kiyro][diag] pushActiveProfileToElectron: setActiveBindings rejected', error);
+      useUiStore.getState().notify('Could not send the profile to Kiyro’s execution engine.', 'error');
+    });
 }
 
 /**
@@ -38,13 +88,36 @@ function isElectron(): boolean {
  */
 export function useAppBootstrap(): void {
   useEffect(() => {
+    // TEMP DIAGNOSTIC: whether/when this mount effect runs at all, and
+    // whether window.kiyro is already present the instant it does (it
+    // should always be — preload runs before any page script).
+    console.log(`[kiyro][diag] mount effect running (wired=${wired}, window.kiyro present=${isElectron()})`);
     if (wired) return;
     wired = true;
 
     initDeviceStore();
     useUiStore.getState().hydrate();
     useQuickActionsStore.getState().hydrate();
-    void useProfileStore.getState().hydrate(DEFAULT_DEVICE);
+
+    // Imperative, not just the reactive effect further down: that effect
+    // depends on `useActiveProfile()`, which is derived state — relying on
+    // it alone assumes React is guaranteed to re-run it once hydration
+    // resolves. Pushing right here, the moment hydration itself finishes, is
+    // what actually restores execution after a restart without the user
+    // touching the Configure page again.
+    void useProfileStore
+      .getState()
+      .hydrate(DEFAULT_DEVICE)
+      .then(() => {
+        const { profiles, activeProfileId } = useProfileStore.getState();
+        const restored = profiles.find((profile) => profile.id === activeProfileId) ?? null;
+        // TEMP DIAGNOSTIC (3): what hydration actually resolved to, right
+        // before attempting to push it.
+        console.log(
+          `[kiyro][diag] post-hydrate restored profile: ${restored ? `id=${restored.id} bindingKeys=[${Object.keys(restored.bindings).join(', ')}]` : 'null'}`,
+        );
+        pushActiveProfileToElectron(restored);
+      });
 
     const normalizer = new EncoderNormalizer();
 
@@ -163,37 +236,15 @@ export function useAppBootstrap(): void {
   }, [autoReconnect, preferencesHydrated]);
 
   // Push the active profile to Kiyro's own execution engine whenever it
-  // becomes reachable or the profile itself changes (saved, switched,
-  // imported). Kiyro stays the source of truth: the main process never has
-  // anything it wasn't just handed.
+  // changes while the app is already running (saved, switched, imported).
+  // Restart-time restoration is handled separately, imperatively, right
+  // after hydration in the mount effect above — this effect alone would
+  // eventually catch that too, but only on trust that React re-runs it
+  // exactly once activeProfile settles; the imperative call doesn't depend
+  // on that. Both share `lastPushedSignature`, so neither double-sends.
   const activeProfile = useActiveProfile();
-  const notify = useUiStore((state) => state.notify);
-  const lastPushedSignatureRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!isElectron() || !activeProfile) return;
-
-    const signature = `${activeProfile.id}:${activeProfile.updatedAt}`;
-    if (lastPushedSignatureRef.current === signature) return;
-
-    let cancelled = false;
-    window.kiyro
-      ?.setActiveBindings({
-        profileId: activeProfile.id,
-        updatedAt: activeProfile.updatedAt,
-        bindings: activeProfile.bindings,
-      })
-      .then(() => {
-        if (!cancelled) lastPushedSignatureRef.current = signature;
-      })
-      .catch(() => {
-        // Left un-pushed: the next change to the active profile retries,
-        // since the signature never got recorded as sent.
-        if (!cancelled) notify('Could not send the profile to Kiyro’s execution engine.', 'error');
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [activeProfile, notify]);
+    pushActiveProfileToElectron(activeProfile);
+  }, [activeProfile]);
 }

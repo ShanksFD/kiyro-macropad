@@ -1,24 +1,15 @@
 'use client';
 
-import { z } from 'zod';
 import { create } from 'zustand';
 import { readJson, StorageKey, writeJson } from '@/lib/storage/browser-storage';
+import { ElectronPreferencesRepository } from '@/lib/storage/electron-preferences-repository';
+import { DEFAULT_PREFERENCES, preferencesSchema } from '@/lib/preferences/schema';
+import type { Preferences } from '@/lib/preferences/schema';
 
-export const preferencesSchema = z.object({
-  density: z.enum(['comfortable', 'compact']).default('comfortable'),
-  /** Reopen the last authorised port automatically on load. */
-  autoReconnect: z.boolean().default(false),
-  confirmBeforeReset: z.boolean().default(true),
-  /** Write editor changes to the active local profile as they happen. */
-  autoSaveLocal: z.boolean().default(false),
-  /** Reveals the developer section: simulator, raw events, protocol diagnostics. */
-  advancedMode: z.boolean().default(false),
-  showRawEvents: z.boolean().default(false),
-});
+export { preferencesSchema, DEFAULT_PREFERENCES };
+export type { Preferences };
 
-export type Preferences = z.infer<typeof preferencesSchema>;
-
-const DEFAULT_PREFERENCES: Preferences = preferencesSchema.parse({});
+const electronPreferences = new ElectronPreferencesRepository();
 
 interface UiStore {
   preferences: Preferences;
@@ -46,13 +37,24 @@ export const useUiStore = create<UiStore>((set, get) => ({
 
   hydrate: () => {
     if (get().hydrated) return;
+    set({ hydrated: true }); // set first: this is the re-entry guard, and the read below is async in Electron
+
+    if (electronPreferences.isAvailable()) {
+      electronPreferences
+        .get()
+        .then((stored) => set({ preferences: stored ?? DEFAULT_PREFERENCES }))
+        .catch(() => undefined);
+      return;
+    }
+
     const stored = readJson(StorageKey.Preferences, preferencesSchema);
-    set({ hydrated: true, preferences: stored ?? DEFAULT_PREFERENCES });
+    set({ preferences: stored ?? DEFAULT_PREFERENCES });
   },
 
   setPreference: (key, value) => {
     const preferences = { ...get().preferences, [key]: value };
-    writeJson(StorageKey.Preferences, preferences);
+    if (electronPreferences.isAvailable()) void electronPreferences.set(preferences);
+    else writeJson(StorageKey.Preferences, preferences);
     set({ preferences });
   },
 

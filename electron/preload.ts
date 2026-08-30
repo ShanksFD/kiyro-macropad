@@ -21,6 +21,7 @@ import type {
   SetActiveProfilePayload,
 } from '../src/lib/electron/ipc-types';
 import type { MacroProfile } from '../src/lib/profiles/types';
+import type { Preferences } from '../src/lib/preferences/schema';
 
 const Channel = {
   DeviceStatus: 'kiyro:device-status',
@@ -35,6 +36,8 @@ const Channel = {
   ProfilesReplaceAll: 'kiyro:profiles:replace-all',
   ProfilesGetActive: 'kiyro:profiles:get-active',
   ProfilesSetActive: 'kiyro:profiles:set-active',
+  PreferencesGet: 'kiyro:preferences:get',
+  PreferencesSet: 'kiyro:preferences:set',
 } as const;
 
 function on<T>(channel: string, callback: (payload: T) => void): () => void {
@@ -60,6 +63,10 @@ const kiyroBridge: KiyroBridge = {
       ipcRenderer.invoke(Channel.ProfilesReplaceAll, profiles),
     getActiveId: (): Promise<string | null> => ipcRenderer.invoke(Channel.ProfilesGetActive),
     setActiveId: (id: string | null): Promise<void> => ipcRenderer.invoke(Channel.ProfilesSetActive, id),
+  },
+  preferences: {
+    get: (): Promise<Preferences | null> => ipcRenderer.invoke(Channel.PreferencesGet),
+    set: (preferences: Preferences): Promise<void> => ipcRenderer.invoke(Channel.PreferencesSet, preferences),
   },
   setActiveBindings: (payload: SetActiveProfilePayload): Promise<void> =>
     ipcRenderer.invoke(Channel.SetActiveProfile, payload),

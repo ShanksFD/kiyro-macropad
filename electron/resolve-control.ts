@@ -23,6 +23,11 @@ export class ActiveProfileStore {
     this.#profileId = payload.profileId;
     this.#updatedAt = payload.updatedAt;
     this.#bindings = payload.bindings;
+    // TEMP DIAGNOSTIC (see hooks/use-app-bootstrap.ts): the actual contents of
+    // the in-memory store buttons are resolved against, right after a write.
+    console.log(
+      `[kiyro][diag] ActiveProfileStore.setActiveProfile: profileId=${this.#profileId} bindingKeys=[${Object.keys(this.#bindings).join(', ')}]`,
+    );
   }
 
   get profileId(): string | null {

@@ -61,7 +61,7 @@ koffi.struct('INPUT', {
   union: 'INPUT_UNION',
 });
 
-const SendInput = user32.func('uint32 SendInput(uint32 nInputs, _Inout_ INPUT *pInputs, int cbSize)');
+const SendInput = user32.func('uint32 SendInput(uint32 nInputs, INPUT *pInputs, int cbSize)');
 const GetLastError = kernel32.func('uint32 GetLastError()');
 const SetLastError = kernel32.func('void SetLastError(uint32 dwErrCode)');
 

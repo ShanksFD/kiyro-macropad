@@ -134,10 +134,12 @@ export class SerialBridge {
   }
 
   stop(): void {
+    const port = this.#state.portInfo?.label;
     this.#stopped = true;
     this.#running = false;
     this.#closePort();
     this.#patch({ ...INITIAL_STATE });
+    if (port) console.log(`[kiyro] ${port} released`);
   }
 
   async #loop(): Promise<void> {

@@ -44,11 +44,21 @@ export class ExecutionPipeline {
 
       if (resolution.status === 'mapped') {
         const action = this.profiles.getBinding(resolution.controlId);
+        // TEMP DIAGNOSTIC: exactly which profile (if any) the resolver is
+        // actually holding at the moment a physical button fires.
+        console.log(
+          `[kiyro][diag] button resolved to ${resolution.controlId}; ActiveProfileStore.profileId=${this.profiles.profileId}; binding=${action ? JSON.stringify(action) : 'none'}`,
+        );
         if (action) {
           const outcome = nativeActionExecutor.execute({ controlId: resolution.controlId, action, at });
+          console.log(`[kiyro] ${resolution.controlId} -> ${outcome.status}${'message' in outcome ? `: ${outcome.message}` : ''}`);
           const outcomePayload: ExecutionOutcomePayload = { controlId: resolution.controlId, action, outcome, at };
           this.#send(IpcChannel.ExecutionOutcome, outcomePayload);
+        } else {
+          console.log(`[kiyro] ${resolution.controlId} (unbound)`);
         }
+      } else if (resolution.status === 'unmapped' && resolution.event.type !== 'unknown') {
+        console.log(`[kiyro] event ${JSON.stringify(resolution.event)} did not resolve to any control`);
       }
 
       const eventPayload: DeviceEventPayload = { event, resolution, at };
@@ -66,6 +76,9 @@ export class ExecutionPipeline {
 
   setActiveProfile(payload: SetActiveProfilePayload): void {
     this.profiles.setActiveProfile(payload);
+    console.log(
+      `[kiyro] active profile set: ${payload.profileId} (${Object.keys(payload.bindings).length} bindings)`,
+    );
   }
 
   #send(channel: string, payload: unknown): void {
