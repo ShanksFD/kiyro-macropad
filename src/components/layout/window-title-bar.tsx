@@ -6,7 +6,6 @@ import Stack from '@mui/material/Stack';
 import { useColorScheme } from '@mui/material/styles';
 import { layout } from '@/theme/tokens';
 import { useKiyroBridge } from '@/hooks/use-kiyro-bridge';
-import { BrandMark } from './brand-mark';
 import { WindowMenu } from './window-menu';
 
 /** `background.paper`/`text.primary` per mode — `src/theme/tokens.ts`'s `palette.neutral`. Kept in sync with `electron/main.ts`'s `DEFAULT_TITLE_BAR_OVERLAY` (dark). */
@@ -33,11 +32,12 @@ function chromeInsetFor(platform: 'win32' | 'darwin' | 'linux' | undefined): {
 
 /**
  * The Electron window's own title bar — replaces the native OS one
- * (`titleBarStyle`, `electron/main.ts`) with Kiyro's own, VSCode-style: the
- * app mark and a View/Help menu on the left, the OS's real caption
- * buttons/traffic lights left in place on whichever side they belong.
- * Spans the full window width, above the sidebar and everything else —
- * `AppShell` renders it outside the sidebar/content split.
+ * (`titleBarStyle`, `electron/main.ts`) with Kiyro's own, VSCode-style: a
+ * View/Help menu on the left, the OS's real caption buttons/traffic lights
+ * left in place on whichever side they belong. No brand mark here — that
+ * stays the sidebar's job (`brand-mark.tsx`'s `BrandLockup`), so it isn't
+ * shown twice. Spans the full window width, above the sidebar and
+ * everything else — `AppShell` renders it outside the sidebar/content split.
  */
 export function WindowTitleBar() {
   const kiyro = useKiyroBridge();
@@ -75,14 +75,7 @@ export function WindowTitleBar() {
       {/* Reserves room for macOS's traffic lights so real content never sits under them. */}
       {leadingPx > 0 && <Box sx={{ width: leadingPx, flexShrink: 0 }} />}
 
-      <Stack
-        direction="row"
-        spacing={2}
-        sx={{ alignItems: 'center', pl: 3, pr: 1, WebkitAppRegion: 'no-drag' }}
-      >
-        <Box sx={{ color: 'primary.main', display: 'flex' }}>
-          <BrandMark size={18} />
-        </Box>
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', pl: 2, pr: 1, WebkitAppRegion: 'no-drag' }}>
         <WindowMenu />
       </Stack>
 

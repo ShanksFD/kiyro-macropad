@@ -21,7 +21,13 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, [density]);
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100dvh', bgcolor: 'background.default' }}>
+    // `height` (not `minHeight`) + `overflow: hidden`: the shell must never
+    // grow past the viewport or the whole page — including `WindowTitleBar`,
+    // an ordinary (non-sticky) element — scrolls with it. The window's real
+    // caption buttons/traffic lights are drawn by the OS outside the page
+    // entirely, so they never move; if the page scrolls, the two visibly
+    // drift apart. `main` below is the only thing allowed to scroll.
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100dvh', overflow: 'hidden', bgcolor: 'background.default' }}>
       {/* Spans the full width, above the sidebar too — matches VSCode's own
           title bar, which isn't scoped to just the editor pane. */}
       <WindowTitleBar />
@@ -29,7 +35,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <Box sx={{ display: 'flex', flex: 1, minHeight: 0 }}>
         <Sidebar />
 
-        <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+        <Box sx={{ flex: 1, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
           <TopBar />
           <MobileNav />
 
@@ -38,6 +44,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             sx={{
               flex: 1,
               minWidth: 0,
+              overflowY: 'auto',
               px: { xs: 4, lg: 6, xl: 8 },
               py: { xs: 5, lg: 7 },
               width: '100%',

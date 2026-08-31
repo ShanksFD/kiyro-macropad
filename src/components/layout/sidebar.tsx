@@ -72,12 +72,16 @@ export function Sidebar() {
         borderColor: 'divider',
         bgcolor: 'background.paper',
         position: 'sticky',
-        top: 0,
-        // Was `100dvh` — correct only when this was a direct child of the
-        // full-viewport row. `AppShell` now nests it below `WindowTitleBar`
-        // (the frameless window's own title bar), so it must stretch to
-        // fill that row instead, or it overflows past the available height.
-        height: '100%',
+        top: layout.windowTitleBarHeight,
+        // Was plain `100dvh` — correct only when this was a direct child of
+        // the full-viewport row. `AppShell` now nests it below
+        // `WindowTitleBar` (the frameless window's own title bar), so its
+        // sticky offset and height both need to subtract that bar's height,
+        // or it overflows past the bottom of the window. Kept `dvh`-based
+        // (not `%`) deliberately — a percentage height here depends on every
+        // ancestor in the chain resolving a definite height correctly,
+        // whereas `dvh` is viewport-relative and doesn't care.
+        height: `calc(100dvh - ${layout.windowTitleBarHeight}px)`,
       }}
     >
       <Box sx={{ px: 5, height: layout.topBarHeight, display: 'flex', alignItems: 'center' }}>

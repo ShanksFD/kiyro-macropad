@@ -26,11 +26,11 @@ export const palette = {
   },
   /** The single product accent. Fill-first; `accentInk` is the text-safe tone. */
   accent: {
-    main: '#2E90FA',
-    dark: '#1570CD',
-    light: '#6BB6FF',
-    inkOnLight: '#0F5FB8',
-    inkOnDark: '#8CC7FF',
+    main: '#FF603F',
+    dark: '#D9432A',
+    light: '#FF8F73',
+    inkOnLight: '#C23D22',
+    inkOnDark: '#FFAB93',
   },
   success: { main: '#12B76A', dark: '#0E9155', light: '#4ED89B' },
   warning: { main: '#F79009', dark: '#C56A06', light: '#FDB44B' },

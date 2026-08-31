@@ -139,6 +139,11 @@ async function createWindow(): Promise<void> {
     width: 1280,
     height: 860,
     icon: WINDOW_ICON_PATH,
+    // Painted immediately at window creation, before the page has loaded
+    // anything — without this Electron defaults to white, which can flash
+    // or show as a mismatched seam right behind/around the caption-button
+    // area for a frame or two on a dark start.
+    backgroundColor: DEFAULT_TITLE_BAR_OVERLAY.color,
     // Frameless: the OS's own title bar/menu bar is replaced by the app's
     // own in-page one (`src/components/layout/window-title-bar.tsx` +
     // `window-menu.tsx`), matching VSCode's look. The OS still draws the
