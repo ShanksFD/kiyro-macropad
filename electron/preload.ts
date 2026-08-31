@@ -19,6 +19,7 @@ import type {
   ExecutionOutcomePayload,
   KiyroBridge,
   SetActiveProfilePayload,
+  TitleBarOverlayPayload,
 } from '../src/lib/electron/ipc-types';
 import type { MacroProfile } from '../src/lib/profiles/types';
 import type { Preferences } from '../src/lib/preferences/schema';
@@ -38,6 +39,12 @@ const Channel = {
   ProfilesSetActive: 'kiyro:profiles:set-active',
   PreferencesGet: 'kiyro:preferences:get',
   PreferencesSet: 'kiyro:preferences:set',
+  WindowReload: 'kiyro:window:reload',
+  WindowForceReload: 'kiyro:window:force-reload',
+  WindowToggleDevTools: 'kiyro:window:toggle-devtools',
+  WindowToggleFullscreen: 'kiyro:window:toggle-fullscreen',
+  WindowShowAbout: 'kiyro:window:show-about',
+  WindowSetTitleBarOverlay: 'kiyro:window:set-titlebar-overlay',
 } as const;
 
 function on<T>(channel: string, callback: (payload: T) => void): () => void {
@@ -70,6 +77,16 @@ const kiyroBridge: KiyroBridge = {
   },
   setActiveBindings: (payload: SetActiveProfilePayload): Promise<void> =>
     ipcRenderer.invoke(Channel.SetActiveProfile, payload),
+  window: {
+    reload: (): Promise<void> => ipcRenderer.invoke(Channel.WindowReload),
+    forceReload: (): Promise<void> => ipcRenderer.invoke(Channel.WindowForceReload),
+    toggleDevTools: (): Promise<void> => ipcRenderer.invoke(Channel.WindowToggleDevTools),
+    toggleFullscreen: (): Promise<void> => ipcRenderer.invoke(Channel.WindowToggleFullscreen),
+    showAbout: (): Promise<void> => ipcRenderer.invoke(Channel.WindowShowAbout),
+    setTitleBarOverlay: (payload: TitleBarOverlayPayload): Promise<void> =>
+      ipcRenderer.invoke(Channel.WindowSetTitleBarOverlay, payload),
+  },
+  platform: process.platform as 'win32' | 'darwin' | 'linux',
 };
 
 try {

@@ -73,7 +73,11 @@ export function Sidebar() {
         bgcolor: 'background.paper',
         position: 'sticky',
         top: 0,
-        height: '100dvh',
+        // Was `100dvh` — correct only when this was a direct child of the
+        // full-viewport row. `AppShell` now nests it below `WindowTitleBar`
+        // (the frameless window's own title bar), so it must stretch to
+        // fill that row instead, or it overflows past the available height.
+        height: '100%',
       }}
     >
       <Box sx={{ px: 5, height: layout.topBarHeight, display: 'flex', alignItems: 'center' }}>

@@ -36,14 +36,16 @@
  * first instance to show its window instead.
  */
 
-import { app, BrowserWindow, Menu, nativeImage, net, protocol } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, nativeImage, net, protocol } from 'electron';
 import type { Tray } from 'electron';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { buildAppMenu } from './menu';
+import { buildMacAppMenu, showAboutDialog } from './menu';
 import { createTray, setTrayConnected } from './tray';
 import { ExecutionPipeline } from './execution-pipeline';
 import { registerIpcHandlers } from './ipc-handlers';
+import { IpcChannel } from '../src/lib/electron/ipc-types';
+import type { TitleBarOverlayPayload } from '../src/lib/electron/ipc-types';
 
 const DEV_SERVER_URL = 'http://localhost:3000';
 const APP_SCHEME = 'app';
@@ -58,6 +60,21 @@ const ASSETS_DIR = path.join(__dirname, '../../electron/assets');
 // only ever applies to the packaged `Kiyro.exe`, never to the stock
 // `electron.exe` binary dev mode runs directly.
 const WINDOW_ICON_PATH = path.join(ASSETS_DIR, 'icon.ico');
+
+/** The app's own in-page title bar height — must match `layout.windowTitleBarHeight` (`src/theme/tokens.ts`), which is what the Windows caption-button overlay gets sized to below. */
+const TITLE_BAR_HEIGHT = 38;
+
+/**
+ * Matches the dark-mode default (`InitColorSchemeScript defaultMode="dark"`,
+ * `src/app/layout.tsx`) — specifically `background.paper`/`text.primary`
+ * (`palette.neutral[900]`/`[100]`, `src/theme/tokens.ts`), since that's the
+ * in-page title bar's own background. Updated live on theme toggle via
+ * `window:set-titlebar-overlay` (`src/components/layout/window-title-bar.tsx`).
+ */
+const DEFAULT_TITLE_BAR_OVERLAY: TitleBarOverlayPayload = {
+  color: '#111419',
+  symbolColor: '#EAEDF1',
+};
 
 // Must be called before `app` is ready. `standard: true` is what makes
 // root-absolute paths (`/_next/...`) resolve against this scheme's origin
@@ -122,6 +139,22 @@ async function createWindow(): Promise<void> {
     width: 1280,
     height: 860,
     icon: WINDOW_ICON_PATH,
+    // Frameless: the OS's own title bar/menu bar is replaced by the app's
+    // own in-page one (`src/components/layout/window-title-bar.tsx` +
+    // `window-menu.tsx`), matching VSCode's look. The OS still draws the
+    // real caption buttons/traffic lights — we're not reimplementing those,
+    // just relocating and re-theming the strip around them.
+    ...(process.platform === 'darwin'
+      ? {
+          titleBarStyle: 'hiddenInset' as const,
+          // Vertically centers the traffic lights in `TITLE_BAR_HEIGHT`
+          // (default position assumes a much shorter native title bar).
+          trafficLightPosition: { x: 14, y: (TITLE_BAR_HEIGHT - 16) / 2 },
+        }
+      : {
+          titleBarStyle: 'hidden' as const,
+          titleBarOverlay: { ...DEFAULT_TITLE_BAR_OVERLAY, height: TITLE_BAR_HEIGHT },
+        }),
     // Created hidden either way, so a `--hidden` launch never flashes a
     // window; the normal path shows it once the page has actually painted
     // (`ready-to-show`), same as if `show` had been left at its default.
@@ -214,7 +247,30 @@ if (!gotSingleInstanceLock) {
       return net.fetch(pathToFileURL(filePath).toString());
     });
 
-    Menu.setApplicationMenu(buildAppMenu());
+    // No visible menu bar at all on Windows/Linux (the in-page one covers
+    // View/Help); macOS keeps the bare minimum its system menu bar needs —
+    // see `menu.ts`.
+    Menu.setApplicationMenu(process.platform === 'darwin' ? buildMacAppMenu() : null);
+
+    // Backs the in-page title bar's View/Help menu (`window-menu.tsx`) —
+    // these replace what the native application menu used to do, now that
+    // it's gone (see above). Registered here rather than in
+    // `ipc-handlers.ts` since these are window/app-chrome concerns, not
+    // device/profile ones.
+    ipcMain.handle(IpcChannel.WindowReload, () => mainWindow?.webContents.reload());
+    ipcMain.handle(IpcChannel.WindowForceReload, () => mainWindow?.webContents.reloadIgnoringCache());
+    ipcMain.handle(IpcChannel.WindowToggleDevTools, () => mainWindow?.webContents.toggleDevTools());
+    ipcMain.handle(IpcChannel.WindowToggleFullscreen, () => {
+      if (mainWindow) mainWindow.setFullScreen(!mainWindow.isFullScreen());
+    });
+    ipcMain.handle(IpcChannel.WindowShowAbout, () => showAboutDialog());
+    ipcMain.handle(IpcChannel.WindowSetTitleBarOverlay, (_event, payload: TitleBarOverlayPayload) => {
+      // Windows/Linux only — macOS's `hiddenInset` traffic lights aren't an
+      // "overlay" in this sense and have no equivalent API.
+      if (process.platform !== 'darwin') {
+        mainWindow?.setTitleBarOverlay({ ...payload, height: TITLE_BAR_HEIGHT });
+      }
+    });
 
     const pipeline = new ExecutionPipeline(() => mainWindow);
     registerIpcHandlers(pipeline);

@@ -63,6 +63,8 @@ export const layout = {
   sidebarWidth: 232,
   sidebarCollapsedWidth: 72,
   topBarHeight: 60,
+  /** The Electron window's own frameless title bar (`window-title-bar.tsx`) — kept in sync with `electron/main.ts`'s `TITLE_BAR_HEIGHT`, which can't import this file directly (outside the electron `tsconfig.json`'s include list). */
+  windowTitleBarHeight: 38,
   inspectorWidth: 400,
   contentMaxWidth: 1680,
 } as const;

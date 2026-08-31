@@ -33,7 +33,19 @@ export const IpcChannel = {
   ProfilesSetActive: 'kiyro:profiles:set-active',
   PreferencesGet: 'kiyro:preferences:get',
   PreferencesSet: 'kiyro:preferences:set',
+  WindowReload: 'kiyro:window:reload',
+  WindowForceReload: 'kiyro:window:force-reload',
+  WindowToggleDevTools: 'kiyro:window:toggle-devtools',
+  WindowToggleFullscreen: 'kiyro:window:toggle-fullscreen',
+  WindowShowAbout: 'kiyro:window:show-about',
+  WindowSetTitleBarOverlay: 'kiyro:window:set-titlebar-overlay',
 } as const;
+
+/** Sent from the renderer whenever its colour scheme changes, Windows/Linux only. */
+export interface TitleBarOverlayPayload {
+  color: string;
+  symbolColor: string;
+}
 
 /** Pushed from main whenever the real serial connection's state changes. */
 export interface DeviceStatusPayload {
@@ -92,4 +104,22 @@ export interface KiyroBridge {
     set(preferences: Preferences): Promise<void>;
   };
   setActiveBindings(payload: SetActiveProfilePayload): Promise<void>;
+  /**
+   * Frameless-window chrome (the app's own title bar replaces the native
+   * one — see `electron/main.ts`'s `titleBarStyle`/`titleBarOverlay`). The
+   * OS still draws the actual minimize/maximize/close buttons (Windows
+   * overlay) or traffic lights (macOS `hiddenInset`); these just cover what
+   * the removed native application menu used to do.
+   */
+  window: {
+    reload(): Promise<void>;
+    forceReload(): Promise<void>;
+    toggleDevTools(): Promise<void>;
+    toggleFullscreen(): Promise<void>;
+    showAbout(): Promise<void>;
+    /** No-op on macOS — the overlay is a Windows/Linux-only concept. */
+    setTitleBarOverlay(payload: TitleBarOverlayPayload): Promise<void>;
+  };
+  /** So the renderer can lay out its own title bar around the OS's caption buttons/traffic lights, which sit on opposite sides. */
+  platform: 'win32' | 'darwin' | 'linux';
 }
