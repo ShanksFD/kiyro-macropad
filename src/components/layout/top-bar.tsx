@@ -6,7 +6,7 @@ import Divider from '@mui/material/Divider';
 import IconButton from '@mui/material/IconButton';
 import Stack from '@mui/material/Stack';
 import Tooltip from '@mui/material/Tooltip';
-import TerminalIcon from '@mui/icons-material/Terminal';
+import { TerminalIcon } from '@/components/icons';
 import { layout } from '@/theme/tokens';
 import { ConnectionBadge } from '@/features/connection/connection-badge';
 import { ConnectButton } from '@/features/connection/connect-button';

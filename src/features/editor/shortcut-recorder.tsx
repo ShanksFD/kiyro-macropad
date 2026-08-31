@@ -5,7 +5,7 @@ import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
-import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
+import { FiberManualRecordIcon } from '@/components/icons';
 import { keyLabel, modifierLabel } from '@/lib/actions/keys';
 import type { Modifier } from '@/lib/actions/keys';
 import { useShortcutRecorder } from '@/hooks/use-shortcut-recorder';

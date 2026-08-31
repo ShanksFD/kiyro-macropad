@@ -12,7 +12,7 @@ import Switch from '@mui/material/Switch';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import { useColorScheme } from '@mui/material/styles';
-import ScienceIcon from '@mui/icons-material/Science';
+import { ScienceIcon } from '@/components/icons';
 import { useDeviceStore } from '@/stores/device-store';
 import { useUiStore } from '@/stores/ui-store';
 import type { Preferences } from '@/stores/ui-store';

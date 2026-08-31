@@ -26,6 +26,7 @@
     "@mui/icons-material": "^9.4.0",
     "@mui/material": "^9.4.0",
     "@mui/material-nextjs": "^9.4.0",
+    "@tabler/icons-react": "^3.46.0",
     "koffi": "^2.9.0",
     "next": "^16.3.3",
     "react": "^19.2.8",
@@ -70,7 +71,9 @@
     ],
     "win": {
       "icon": "electron/assets/icon.ico",
-      "target": ["nsis"]
+      "target": [
+        "nsis"
+      ]
     },
     "nsis": {
       "oneClick": false,
@@ -85,7 +88,9 @@
     "mac": {
       "icon": "electron/assets/icon.icns",
       "category": "public.app-category.utilities",
-      "target": ["dmg"]
+      "target": [
+        "dmg"
+      ]
     },
     "dmg": {
       "icon": "electron/assets/icon.icns"

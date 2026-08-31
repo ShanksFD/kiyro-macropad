@@ -21,13 +21,15 @@ import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
-import AddIcon from '@mui/icons-material/Add';
-import ContentCopyIcon from '@mui/icons-material/ContentCopy';
-import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined';
-import DownloadIcon from '@mui/icons-material/Download';
-import DriveFileRenameOutlineIcon from '@mui/icons-material/DriveFileRenameOutline';
-import MoreVertIcon from '@mui/icons-material/MoreVert';
-import UploadIcon from '@mui/icons-material/Upload';
+import {
+  AddIcon,
+  ContentCopyIcon,
+  DeleteOutlineIcon,
+  DownloadIcon,
+  DriveFileRenameOutlineIcon,
+  MoreVertIcon,
+  UploadIcon,
+} from '@/components/icons';
 import { countAssigned } from '@/lib/profiles/factory';
 import { downloadProfile, parseProfileFile } from '@/lib/profiles/io';
 import type { MacroProfile } from '@/lib/profiles/types';

@@ -1,19 +1,21 @@
 'use client';
 
-import type { SvgIconProps } from '@mui/material/SvgIcon';
-import KeyboardIcon from '@mui/icons-material/Keyboard';
-import KeyboardCommandKeyIcon from '@mui/icons-material/KeyboardCommandKey';
-import ShortTextIcon from '@mui/icons-material/ShortText';
-import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutlined';
-import VolumeUpIcon from '@mui/icons-material/VolumeUp';
-import SwipeVerticalIcon from '@mui/icons-material/SwipeVertical';
-import MouseIcon from '@mui/icons-material/Mouse';
-import PowerSettingsNewIcon from '@mui/icons-material/PowerSettingsNew';
-import AppsIcon from '@mui/icons-material/Apps';
-import RemoveIcon from '@mui/icons-material/Remove';
+import type { MuiTablerIconProps } from '@/components/icons/create-tabler-icon';
+import {
+  KeyboardIcon,
+  KeyboardCommandKeyIcon,
+  ShortTextIcon,
+  PlayCircleOutlineIcon,
+  VolumeUpIcon,
+  SwipeVerticalIcon,
+  MouseIcon,
+  PowerSettingsNewIcon,
+  AppsIcon,
+  RemoveIcon,
+} from '@/components/icons';
 import type { ActionType } from '@/lib/actions/types';
 
-const ICONS: Record<ActionType, React.ComponentType<SvgIconProps>> = {
+const ICONS: Record<ActionType, React.ComponentType<MuiTablerIconProps>> = {
   none: RemoveIcon,
   keyboard: KeyboardIcon,
   hotkey: KeyboardCommandKeyIcon,
@@ -27,7 +29,7 @@ const ICONS: Record<ActionType, React.ComponentType<SvgIconProps>> = {
 };
 
 /** One icon per action type, used everywhere an action is listed. */
-export function ActionIcon({ type, ...props }: { type: ActionType } & SvgIconProps) {
+export function ActionIcon({ type, ...props }: { type: ActionType } & MuiTablerIconProps) {
   const Icon = ICONS[type];
   return <Icon fontSize="small" {...props} />;
 }

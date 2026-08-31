@@ -15,9 +15,7 @@ import ToggleButton from '@mui/material/ToggleButton';
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
-import StarIcon from '@mui/icons-material/Star';
-import StarBorderIcon from '@mui/icons-material/StarBorder';
-import ClearIcon from '@mui/icons-material/Clear';
+import { StarIcon, StarBorderIcon, ClearIcon } from '@/components/icons';
 import {
   ACTION_CATEGORIES,
   categoryOfAction,

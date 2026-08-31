@@ -5,7 +5,7 @@ import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
-import ScienceIcon from '@mui/icons-material/Science';
+import { ScienceIcon } from '@/components/icons';
 import { useState } from 'react';
 import { DEFAULT_DEVICE } from '@/lib/devices/registry';
 import { deviceSession } from '@/lib/serial/device-session';

@@ -5,7 +5,7 @@ import Box from '@mui/material/Box';
 import Stack from '@mui/material/Stack';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
-import HelpOutlineIcon from '@mui/icons-material/HelpOutlined';
+import { HelpOutlineIcon } from '@/components/icons';
 import { describeAction } from '@/lib/actions/format';
 import type { Action } from '@/lib/actions/types';
 import type { ButtonDescriptor } from '@/lib/devices/types';

@@ -2,8 +2,7 @@
 
 import IconButton from '@mui/material/IconButton';
 import Tooltip from '@mui/material/Tooltip';
-import DarkModeOutlinedIcon from '@mui/icons-material/DarkModeOutlined';
-import LightModeOutlinedIcon from '@mui/icons-material/LightModeOutlined';
+import { DarkModeOutlinedIcon, LightModeOutlinedIcon } from '@/components/icons';
 import { useColorScheme } from '@mui/material/styles';
 
 export function ThemeToggle() {

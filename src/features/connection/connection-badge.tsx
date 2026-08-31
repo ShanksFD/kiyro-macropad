@@ -5,11 +5,7 @@ import Stack from '@mui/material/Stack';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import CircularProgress from '@mui/material/CircularProgress';
-import UsbOffIcon from '@mui/icons-material/UsbOff';
-import UsbIcon from '@mui/icons-material/Usb';
-import ErrorOutlineIcon from '@mui/icons-material/ErrorOutlined';
-import BlockIcon from '@mui/icons-material/Block';
-import ScienceIcon from '@mui/icons-material/Science';
+import { UsbOffIcon, UsbIcon, ErrorOutlineIcon, BlockIcon, ScienceIcon } from '@/components/icons';
 import { CONNECTION_LABELS, useDeviceStore } from '@/stores/device-store';
 
 const DOT_COLOUR = {

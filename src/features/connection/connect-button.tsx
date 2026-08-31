@@ -8,11 +8,7 @@ import MenuItem from '@mui/material/MenuItem';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
 import Tooltip from '@mui/material/Tooltip';
-import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
-import CableIcon from '@mui/icons-material/Cable';
-import RefreshIcon from '@mui/icons-material/Refresh';
-import ScienceIcon from '@mui/icons-material/Science';
-import LinkOffIcon from '@mui/icons-material/LinkOff';
+import { ArrowDropDownIcon, CableIcon, RefreshIcon, ScienceIcon, LinkOffIcon } from '@/components/icons';
 import { useDeviceStore } from '@/stores/device-store';
 import { useUiStore } from '@/stores/ui-store';
 

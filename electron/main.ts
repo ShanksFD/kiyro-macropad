@@ -36,7 +36,7 @@
  * first instance to show its window instead.
  */
 
-import { app, BrowserWindow, Menu, net, protocol } from 'electron';
+import { app, BrowserWindow, Menu, nativeImage, net, protocol } from 'electron';
 import type { Tray } from 'electron';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -48,6 +48,16 @@ import { registerIpcHandlers } from './ipc-handlers';
 const DEV_SERVER_URL = 'http://localhost:3000';
 const APP_SCHEME = 'app';
 const OUT_DIR = path.join(__dirname, '../../out');
+const ASSETS_DIR = path.join(__dirname, '../../electron/assets');
+
+// Only actually applies on Windows/Linux — Electron ignores `BrowserWindow`'s
+// `icon` option on macOS (the dock icon comes from the app bundle's .icns at
+// package time instead, via `app.dock.setIcon` below for dev mode). This is
+// what makes the window/taskbar icon correct in `electron:dev` too, not just
+// in a packaged build — electron-builder's `win.icon` config (package.json)
+// only ever applies to the packaged `Kiyro.exe`, never to the stock
+// `electron.exe` binary dev mode runs directly.
+const WINDOW_ICON_PATH = path.join(ASSETS_DIR, 'icon.ico');
 
 // Must be called before `app` is ready. `standard: true` is what makes
 // root-absolute paths (`/_next/...`) resolve against this scheme's origin
@@ -111,6 +121,7 @@ async function createWindow(): Promise<void> {
   const window = new BrowserWindow({
     width: 1280,
     height: 860,
+    icon: WINDOW_ICON_PATH,
     // Created hidden either way, so a `--hidden` launch never flashes a
     // window; the normal path shows it once the page has actually painted
     // (`ready-to-show`), same as if `show` had been left at its default.
@@ -186,6 +197,14 @@ if (!gotSingleInstanceLock) {
   });
 
   app.whenReady().then(() => {
+    // Dev mode on macOS runs the stock Electron binary, which has no dock
+    // icon of its own — a packaged build gets this for free from the
+    // bundled `.icns` (`build.mac.icon`, package.json) instead.
+    if (process.platform === 'darwin' && !app.isPackaged) {
+      const dockIcon = nativeImage.createFromPath(path.join(ASSETS_DIR, 'icon.icns'));
+      if (!dockIcon.isEmpty()) app.dock?.setIcon(dockIcon);
+    }
+
     // Only ever hit for a packaged build (`app://kiyro/...`, per `loadURL`
     // above) — dev mode loads `http://localhost:3000` directly and never
     // touches this handler.
