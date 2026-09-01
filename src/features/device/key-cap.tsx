@@ -10,7 +10,8 @@ import { describeAction } from '@/lib/actions/format';
 import type { Action } from '@/lib/actions/types';
 import type { ButtonDescriptor } from '@/lib/devices/types';
 import { selectIsLive, useLiveInputStore } from '@/stores/live-input-store';
-import { monoFontFamily, vars } from '@/theme/theme';
+import { monoFontFamily } from '@/theme/theme';
+import { radius } from '@/theme/tokens';
 import { ActionIcon } from '@/features/editor/action-icon';
 
 interface Props {
@@ -49,37 +50,39 @@ export function KeyCap({ button, action, selected, showEventCode, onSelect }: Pr
           position: 'relative',
           width: '100%',
           aspectRatio: '1 / 1',
-          borderRadius: 3.5,
+          borderRadius: `${radius.lg}px`,
           p: 2,
           alignItems: 'stretch',
           justifyContent: 'flex-start',
           textAlign: 'left',
           overflow: 'hidden',
+          boxShadow: 'none',
           bgcolor: assigned ? 'device.keycapAssigned' : 'device.keycap',
           color: 'device.legend',
           border: '1px solid',
           borderColor: selected ? 'primary.main' : 'device.keycapEdge',
-          boxShadow: `0 3px 0 ${vars(theme).palette.device.keycapEdge}, 0 6px 14px rgba(0,0,0,0.28)`,
+          // Flat — no drop shadow. Press/selected/live states read entirely
+          // through colour, border, and a small translate on press instead.
           transform: 'translateY(0)',
-          transition: theme.transitions.create(
-            ['transform', 'box-shadow', 'background-color', 'border-color'],
-            { duration: theme.transitions.duration.shorter },
-          ),
+          transition: theme.transitions.create(['transform', 'background-color', 'border-color'], {
+            duration: theme.transitions.duration.shorter,
+          }),
           '&:hover': { bgcolor: 'device.keycapHover' },
-          '&:active': { transform: 'translateY(2px)', boxShadow: 'none' },
+          '&:active': { transform: 'translateY(1px)' },
           '&.Mui-focusVisible': {
             outline: '2px solid',
             outlineColor: 'primary.main',
             outlineOffset: 2,
           },
           ...(selected && {
-            boxShadow: `0 0 0 2px ${vars(theme).palette.primary.main}, 0 3px 0 ${vars(theme).palette.device.keycapEdge}, 0 8px 18px rgba(0,0,0,0.30)`,
+            outline: '2px solid',
+            outlineColor: 'primary.main',
+            outlineOffset: -1,
           }),
           ...(live && {
             bgcolor: 'device.keycapLive',
             color: 'primary.contrastText',
-            transform: 'translateY(3px)',
-            boxShadow: 'none',
+            transform: 'translateY(1px)',
           }),
         })}
       >

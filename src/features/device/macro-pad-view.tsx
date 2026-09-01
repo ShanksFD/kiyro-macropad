@@ -7,6 +7,7 @@ import Chip from '@mui/material/Chip';
 import type { BindingMap } from '@/lib/actions/types';
 import type { DeviceDefinition } from '@/lib/devices/types';
 import { vars } from '@/theme/theme';
+import { radius } from '@/theme/tokens';
 import { EncoderDial } from './encoder-dial';
 import { KeyCap } from './key-cap';
 
@@ -38,13 +39,15 @@ export function MacroPadView({
     <Box
       sx={(theme) => ({
         p: { xs: 4, lg: 6 },
-        borderRadius: 5,
+        borderRadius: `${radius.xl}px`,
         bgcolor: 'device.chassis',
         border: '1px solid',
         borderColor: 'device.chassisEdge',
-        boxShadow: `0 1px 0 rgba(255,255,255,0.05) inset, 0 18px 40px -24px rgba(0,0,0,0.75)`,
+        boxShadow: 'none',
         maxWidth: 760,
+        width: '100%',
         mx: 'auto',
+        overflow: 'hidden',
         // A faint sheen so the body reads as a moulded surface, not a panel.
         backgroundImage: `radial-gradient(120% 90% at 50% -20%, ${vars(theme).palette.action.hover}, transparent 60%)`,
       })}

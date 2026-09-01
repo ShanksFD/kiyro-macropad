@@ -10,7 +10,7 @@ import { describeAction } from '@/lib/actions/format';
 import type { Action, BindingMap } from '@/lib/actions/types';
 import type { ControlDescriptor, EncoderDescriptor } from '@/lib/devices/types';
 import { useLiveInputStore } from '@/stores/live-input-store';
-import { vars } from '@/theme/theme';
+import { radius } from '@/theme/tokens';
 
 interface Props {
   encoder: EncoderDescriptor;
@@ -53,12 +53,16 @@ export function EncoderDial({ encoder, bindings, selectedControlId, onSelect }: 
       sx={{
         alignItems: 'center',
         p: 4,
-        borderRadius: 3.5,
+        borderRadius: `${radius.lg}px`,
         border: '1px solid',
         borderColor: 'device.keycapEdge',
         bgcolor: 'device.keycap',
         minWidth: 0,
         flex: 1,
+        // Nothing should ever visually escape the rounded card — a squeezed
+        // row's trailing icon (below) used to spill past this corner at
+        // narrow widths instead of being clipped or wrapped.
+        overflow: 'hidden',
       }}
     >
       <Stack spacing={2} sx={{ alignItems: 'center', flexShrink: 0 }}>
@@ -72,13 +76,11 @@ export function EncoderDial({ encoder, bindings, selectedControlId, onSelect }: 
             bgcolor: 'device.keycapAssigned',
             border: '1px solid',
             borderColor: 'device.keycapEdge',
-            boxShadow: pressed
-              ? 'none'
-              : `0 4px 0 ${vars(theme).palette.device.keycapEdge}, 0 8px 16px rgba(0,0,0,0.30)`,
+            boxShadow: 'none',
             display: 'grid',
             placeItems: 'center',
-            transform: `translateY(${pressed ? 3 : 0}px) rotate(${turningCw ? 14 : turningCcw ? -14 : 0}deg)`,
-            transition: theme.transitions.create(['transform', 'box-shadow', 'background-color'], {
+            transform: `translateY(${pressed ? 2 : 0}px) rotate(${turningCw ? 14 : turningCcw ? -14 : 0}deg)`,
+            transition: theme.transitions.create(['transform', 'background-color'], {
               duration: theme.transitions.duration.shorter,
             }),
             ...((turningCw || turningCcw) && { bgcolor: 'device.keycapLive' }),
@@ -159,9 +161,15 @@ function EncoderRow({
           alignItems: 'center',
           justifyContent: 'flex-start',
           width: '100%',
+          // Without this, the row refuses to shrink below its content's
+          // natural width once nested this deep in flex containers — the
+          // trailing help icon (below) then visually escapes the card's
+          // rounded corner at narrow widths instead of the text ellipsizing.
+          minWidth: 0,
+          overflow: 'hidden',
           px: 2.5,
           py: 1.5,
-          borderRadius: 2,
+          borderRadius: `${radius.md}px`,
           textAlign: 'left',
           color: 'device.legend',
           border: '1px solid',
@@ -174,7 +182,7 @@ function EncoderRow({
           '&.Mui-focusVisible': { outline: '2px solid', outlineColor: 'primary.main' },
         })}
       >
-        <Box sx={{ display: 'flex', opacity: 0.7 }}>{icon}</Box>
+        <Box sx={{ display: 'flex', opacity: 0.7, flexShrink: 0 }}>{icon}</Box>
 
         <Typography
           component="span"
@@ -188,13 +196,13 @@ function EncoderRow({
           component="span"
           variant="caption"
           noWrap
-          sx={{ flex: 1, fontWeight: 600, opacity: assigned ? 1 : 0.45 }}
+          sx={{ flex: 1, minWidth: 0, fontWeight: 600, opacity: assigned ? 1 : 0.45 }}
         >
           {assigned ? label.primary : 'Unassigned'}
         </Typography>
 
         {control.confidence !== 'verified' && (
-          <HelpOutlineIcon aria-hidden sx={{ fontSize: 14, opacity: 0.6 }} />
+          <HelpOutlineIcon aria-hidden sx={{ fontSize: 14, opacity: 0.6, flexShrink: 0 }} />
         )}
       </ButtonBase>
     </Tooltip>

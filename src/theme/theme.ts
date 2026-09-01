@@ -181,7 +181,7 @@ export const theme = createTheme({
     MuiButton: {
       defaultProps: { disableElevation: true, disableRipple: true, size: 'small' },
       styleOverrides: {
-        root: { borderRadius: radius.md, paddingInline: 14, minHeight: 34 },
+        root: { borderRadius: radius.md, paddingInline: 14, minHeight: 34, boxShadow: 'none' },
         sizeSmall: { minHeight: 32, paddingInline: 12 },
         sizeLarge: { minHeight: 42, paddingInline: 20, fontSize: '0.875rem' },
         outlined: ({ theme: t }) => ({
@@ -192,6 +192,27 @@ export const theme = createTheme({
             backgroundColor: vars(t).palette.action.hover,
           },
         }),
+        // `disableElevation` (above) already strips the default elevation
+        // shadow — this only exists to force plain near-black fills instead
+        // of the accent colour on the *default* (primary) contained button,
+        // the one actually used for every real CTA (Connect, Save, Open
+        // configurator, New profile…). Semantic colours (`color="error"`,
+        // the reset-to-defaults button) are intentionally left untouched —
+        // only `ownerState.color === 'primary'` is affected.
+        contained: ({ theme: t, ownerState }) =>
+          ownerState.color === 'primary' || ownerState.color === undefined
+            ? {
+                boxShadow: 'none',
+                backgroundColor: '#0B0E12',
+                color: '#FFFFFF',
+                '&:hover': { backgroundColor: '#161B22', boxShadow: 'none' },
+                '&:active': { backgroundColor: '#111419' },
+                '&.Mui-disabled': {
+                  backgroundColor: vars(t).palette.action.disabledBackground,
+                  color: vars(t).palette.action.disabled,
+                },
+              }
+            : { boxShadow: 'none', '&:hover': { boxShadow: 'none' } },
       },
     },
     MuiIconButton: {
