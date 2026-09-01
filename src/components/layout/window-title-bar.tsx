@@ -1,18 +1,10 @@
 'use client';
 
-import { useEffect } from 'react';
 import Box from '@mui/material/Box';
 import Stack from '@mui/material/Stack';
-import { useColorScheme } from '@mui/material/styles';
 import { layout } from '@/theme/tokens';
 import { useKiyroBridge } from '@/hooks/use-kiyro-bridge';
 import { WindowMenu } from './window-menu';
-
-/** `background.paper`/`text.primary` per mode — `src/theme/tokens.ts`'s `palette.neutral`. Kept in sync with `electron/main.ts`'s `DEFAULT_TITLE_BAR_OVERLAY` (dark). */
-const TITLE_BAR_OVERLAY_BY_MODE = {
-  dark: { color: '#111419', symbolColor: '#EAEDF1' },
-  light: { color: '#FFFFFF', symbolColor: '#2A323C' },
-} as const;
 
 /**
  * Reserved space for whatever the OS draws over this bar's own corner — the
@@ -41,18 +33,7 @@ function chromeInsetFor(platform: 'win32' | 'darwin' | 'linux' | undefined): {
  */
 export function WindowTitleBar() {
   const kiyro = useKiyroBridge();
-  const { mode, systemMode } = useColorScheme();
   const { leadingPx, trailingPx } = chromeInsetFor(kiyro?.platform);
-  const resolvedMode = mode === 'system' ? systemMode : mode;
-
-  // Keeps the Windows/Linux caption-button overlay matching this bar's own
-  // background — Electron paints it once at window creation and never again
-  // on its own, so the theme toggle (including "follow system") would
-  // otherwise leave it stuck on whichever mode the window happened to start in.
-  useEffect(() => {
-    if (!kiyro || resolvedMode === undefined) return;
-    void kiyro.window.setTitleBarOverlay(TITLE_BAR_OVERLAY_BY_MODE[resolvedMode === 'light' ? 'light' : 'dark']);
-  }, [kiyro, resolvedMode]);
 
   return (
     <Box
@@ -65,17 +46,17 @@ export function WindowTitleBar() {
         borderBottom: 1,
         borderColor: 'divider',
         bgcolor: 'background.paper',
-        // Makes the whole bar the window's drag handle (frameless window,
-        // `electron/main.ts`) — a no-op outside Electron. `WindowMenu`
-        // below opts back out via `no-drag`, or clicks on it would just
-        // drag the window instead of opening the menu.
         WebkitAppRegion: 'drag',
       }}
     >
       {/* Reserves room for macOS's traffic lights so real content never sits under them. */}
       {leadingPx > 0 && <Box sx={{ width: leadingPx, flexShrink: 0 }} />}
 
-      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', pl: 2, pr: 1, WebkitAppRegion: 'no-drag' }}>
+      <Stack
+        direction="row"
+        spacing={1}
+        sx={{ alignItems: 'center', pl: 2, pr: 1, WebkitAppRegion: 'no-drag' }}
+      >
         <WindowMenu />
       </Stack>
 

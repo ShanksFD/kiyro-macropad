@@ -12,7 +12,13 @@ import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
-import { DevicesOtherIcon, TuneIcon, LayersIcon, SettingsIcon, TerminalIcon } from '@/components/icons';
+import {
+  DevicesOtherIcon,
+  TuneIcon,
+  LayersIcon,
+  SettingsIcon,
+  TerminalIcon,
+} from '@/components/icons';
 import { layout } from '@/theme/tokens';
 import { useUiStore } from '@/stores/ui-store';
 import { useEditorStore } from '@/stores/editor-store';
@@ -85,7 +91,7 @@ export function Sidebar() {
       }}
     >
       <Box sx={{ px: 5, height: layout.topBarHeight, display: 'flex', alignItems: 'center' }}>
-        <NextLink href={'/' as Route} style={{ textDecoration: 'none', color: 'inherit' }}>
+        <NextLink href={'/configure' as Route} style={{ textDecoration: 'none', color: 'inherit' }}>
           <BrandLockup />
         </NextLink>
       </Box>

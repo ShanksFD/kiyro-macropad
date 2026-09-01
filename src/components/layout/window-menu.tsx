@@ -43,7 +43,9 @@ export function WindowMenu() {
   const buttonSx = {
     minWidth: 0,
     px: 2.5,
-    py: 1,
+    py: 0,
+    height: 'auto',
+    minHeight: 'auto',
     fontSize: '0.8125rem',
     fontWeight: 500,
     color: 'text.secondary',

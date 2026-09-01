@@ -120,8 +120,7 @@ export function ConfigureView() {
           sx={{
             width: { xs: '100%', lg: layout.inspectorWidth },
             flexShrink: 0,
-            position: { lg: 'sticky' },
-            top: { lg: 84 },
+            top: 84,
           }}
         >
           <ControlInspector device={device} />

@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from 'next';
 import { Inter, JetBrains_Mono } from 'next/font/google';
-import InitColorSchemeScript from '@mui/material/InitColorSchemeScript';
 import { AppProviders } from '@/providers/app-providers';
 import { AppShell } from '@/components/layout/app-shell';
 
@@ -26,19 +25,16 @@ export const metadata: Metadata = {
   applicationName: 'Kiyro',
 };
 
+// Dark-only — see `theme/theme.ts`. No `prefers-color-scheme` branching:
+// Kiyro never follows the OS scheme, so there's only one value to report.
 export const viewport: Viewport = {
-  themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#F4F6F8' },
-    { media: '(prefers-color-scheme: dark)', color: '#0B0E12' },
-  ],
+  themeColor: '#0B0E12',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${sans.variable} ${mono.variable}`} suppressHydrationWarning>
       <body>
-        {/* Applies the stored colour scheme before first paint. */}
-        <InitColorSchemeScript attribute="class" defaultMode="dark" />
         <AppProviders>
           <AppShell>{children}</AppShell>
         </AppProviders>

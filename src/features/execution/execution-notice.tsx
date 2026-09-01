@@ -5,11 +5,19 @@ import AlertTitle from '@mui/material/AlertTitle';
 import Chip from '@mui/material/Chip';
 import Tooltip from '@mui/material/Tooltip';
 import { deriveExecutionAvailability } from '@/lib/execution/executor';
+import { useKiyroBridge } from '@/hooks/use-kiyro-bridge';
 import { useDeviceStore } from '@/stores/device-store';
 
-/** Reads whether Kiyro's own execution engine (Electron's main process) has a macro pad attached. */
+/**
+ * Reads whether Kiyro's own execution engine (Electron's main process) has a
+ * macro pad attached. `useKiyroBridge` (not a direct `window.kiyro` read)
+ * matters here specifically — Electron's preload injects `window.kiyro`
+ * synchronously before any page script runs, so reading it straight in the
+ * render body disagrees with the server's bridge-less render on the very
+ * first client pass, not just later. See that hook's own comment.
+ */
 function useExecutionAvailability() {
-  const connected = typeof window !== 'undefined' && Boolean(window.kiyro);
+  const connected = Boolean(useKiyroBridge());
   const deviceConnected = useDeviceStore((state) => state.status === 'connected');
   return deriveExecutionAvailability({ connected, deviceConnected });
 }

@@ -36,7 +36,6 @@ import {
   IconHelpCircle,
   IconKeyboard,
   IconMinus,
-  IconMoon,
   IconMouse,
   IconNotes,
   IconPlayerPause,
@@ -54,7 +53,6 @@ import {
   IconStack2,
   IconStar,
   IconStarFilled,
-  IconSun,
   IconTerminal2,
   IconTextSize,
   IconTrash,
@@ -79,7 +77,6 @@ export const ClearIcon = createTablerIcon(IconX);
 export const CloseIcon = createTablerIcon(IconX);
 export const ContentCopyIcon = createTablerIcon(IconCopy);
 export const ContentPasteIcon = createTablerIcon(IconClipboard);
-export const DarkModeOutlinedIcon = createTablerIcon(IconMoon);
 export const DeleteOutlineIcon = createTablerIcon(IconTrash);
 export const DeleteSweepIcon = createTablerIcon(IconTrashX);
 export const DevicesOtherIcon = createTablerIcon(IconDevices);
@@ -93,7 +90,6 @@ export const HelpOutlineIcon = createTablerIcon(IconHelpCircle);
 export const KeyboardIcon = createTablerIcon(IconKeyboard);
 export const KeyboardCommandKeyIcon = createTablerIcon(IconCommand);
 export const LayersIcon = createTablerIcon(IconStack2);
-export const LightModeOutlinedIcon = createTablerIcon(IconSun);
 export const LinkOffIcon = createTablerIcon(IconUnlink);
 export const MoreVertIcon = createTablerIcon(IconDotsVertical);
 export const MouseIcon = createTablerIcon(IconMouse);

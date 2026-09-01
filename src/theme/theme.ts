@@ -47,30 +47,15 @@ const deviceDark: DevicePalette = {
   legendMuted: '#8B95A3',
 };
 
-const deviceLight: DevicePalette = {
-  chassis: '#E7EAEF',
-  chassisEdge: '#C9CFD8',
-  keycap: '#FFFFFF',
-  keycapEdge: '#CBD2DB',
-  keycapHover: '#F4F7FB',
-  keycapAssigned: '#EEF4FE',
-  keycapSelected: palette.accent.main,
-  keycapLive: palette.accent.main,
-  legend: '#141A22',
-  legendMuted: '#5E6875',
-};
-
 const fontStack = 'var(--font-sans), "Segoe UI", system-ui, -apple-system, sans-serif';
 
 export const monoFontFamily =
   'var(--font-mono), "SFMono-Regular", ui-monospace, Consolas, monospace';
 
-/** `theme.vars` only exists when CSS variables are enabled; this keeps call sites terse. */
 export const vars = (t: Theme) => t.vars ?? t;
 
 export const theme = createTheme({
-  cssVariables: { colorSchemeSelector: 'class' },
-  defaultColorScheme: 'dark',
+  cssVariables: true,
   colorSchemes: {
     dark: {
       palette: {
@@ -90,30 +75,6 @@ export const theme = createTheme({
         divider: 'rgba(255, 255, 255, 0.10)',
         action: { hover: 'rgba(255, 255, 255, 0.05)', selected: 'rgba(46, 144, 250, 0.16)' },
         device: deviceDark,
-      },
-    },
-    light: {
-      palette: {
-        mode: 'light',
-        primary: {
-          main: palette.accent.inkOnLight,
-          dark: '#0A4E96',
-          light: palette.accent.main,
-          contrastText: '#FFFFFF',
-        },
-        success: palette.success,
-        warning: palette.warning,
-        error: palette.error,
-        info: palette.info,
-        background: { default: palette.neutral[50], paper: palette.neutral[0] },
-        text: {
-          primary: palette.neutral[900],
-          secondary: palette.neutral[500],
-          disabled: palette.neutral[400],
-        },
-        divider: 'rgba(17, 20, 25, 0.10)',
-        action: { hover: 'rgba(17, 20, 25, 0.04)', selected: 'rgba(15, 95, 184, 0.10)' },
-        device: deviceLight,
       },
     },
   },
@@ -192,28 +153,10 @@ export const theme = createTheme({
             backgroundColor: vars(t).palette.action.hover,
           },
         }),
-        // `disableElevation` (above) already strips the default elevation
-        // shadow — this only exists to force plain near-black fills instead
-        // of the accent colour on the *default* (primary) contained button,
-        // the one actually used for every real CTA (Connect, Save, Open
-        // configurator, New profile…). Semantic colours (`color="error"`,
-        // the reset-to-defaults button) are intentionally left untouched —
-        // only `ownerState.color === 'primary'` is affected.
-        contained: ({ theme: t, ownerState }) =>
-          ownerState.color === 'primary' || ownerState.color === undefined
-            ? {
-                boxShadow: 'none',
-                backgroundColor: '#0B0E12',
-                color: '#FFFFFF',
-                '&:hover': { backgroundColor: '#161B22', boxShadow: 'none' },
-                '&:active': { backgroundColor: '#111419' },
-                '&.Mui-disabled': {
-                  backgroundColor: vars(t).palette.action.disabledBackground,
-                  color: vars(t).palette.action.disabled,
-                },
-              }
-            : { boxShadow: 'none', '&:hover': { boxShadow: 'none' } },
       },
+    },
+    MuiButtonGroup: {
+      defaultProps: { disableElevation: true, disableRipple: true, size: 'small' },
     },
     MuiIconButton: {
       defaultProps: { size: 'small' },

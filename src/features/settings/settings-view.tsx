@@ -11,7 +11,6 @@ import Stack from '@mui/material/Stack';
 import Switch from '@mui/material/Switch';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
-import { useColorScheme } from '@mui/material/styles';
 import { ScienceIcon } from '@/components/icons';
 import { useDeviceStore } from '@/stores/device-store';
 import { useUiStore } from '@/stores/ui-store';
@@ -48,7 +47,6 @@ function Section({
 }
 
 export function SettingsView() {
-  const { mode, setMode } = useColorScheme();
   const preferences = useUiStore((state) => state.preferences);
   const setPreference = useUiStore((state) => state.setPreference);
   const notify = useUiStore((state) => state.notify);
@@ -88,19 +86,7 @@ export function SettingsView() {
 
       <Paper variant="outlined" sx={{ px: 5 }}>
         <Stack divider={<Divider />}>
-          <Section title="General" description="Appearance and layout density.">
-            <TextField
-              select
-              label="Theme"
-              value={mode ?? 'system'}
-              onChange={(event) => setMode(event.target.value as 'light' | 'dark' | 'system')}
-              sx={{ maxWidth: 260 }}
-            >
-              <MenuItem value="system">Match system</MenuItem>
-              <MenuItem value="light">Light</MenuItem>
-              <MenuItem value="dark">Dark</MenuItem>
-            </TextField>
-
+          <Section title="General" description="Layout density. Kiyro is dark-only.">
             <TextField
               select
               label="Density"

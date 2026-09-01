@@ -3,6 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "description": "Kiyro — macro pad configurator",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ShanksFD/kiyro-macropad.git"
+  },
+  "author": {
+    "name": "Kiyro",
+    "email": "anassookrat@gmail.com"
+  },
   "main": "dist-electron/electron/main.js",
   "scripts": {
     "dev": "next dev",

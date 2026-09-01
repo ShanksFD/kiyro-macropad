@@ -45,9 +45,10 @@ import { createTray, setTrayConnected } from './tray';
 import { ExecutionPipeline } from './execution-pipeline';
 import { registerIpcHandlers } from './ipc-handlers';
 import { IpcChannel } from '../src/lib/electron/ipc-types';
-import type { TitleBarOverlayPayload } from '../src/lib/electron/ipc-types';
 
-const DEV_SERVER_URL = 'http://localhost:3000';
+// Straight to Configure — there's no separate home/landing page (see the
+// packaged-build branch of `createWindow()` below for the full reasoning).
+const DEV_SERVER_URL = 'http://localhost:3000/configure';
 const APP_SCHEME = 'app';
 const OUT_DIR = path.join(__dirname, '../../out');
 const ASSETS_DIR = path.join(__dirname, '../../electron/assets');
@@ -62,16 +63,15 @@ const ASSETS_DIR = path.join(__dirname, '../../electron/assets');
 const WINDOW_ICON_PATH = path.join(ASSETS_DIR, 'icon.ico');
 
 /** The app's own in-page title bar height — must match `layout.windowTitleBarHeight` (`src/theme/tokens.ts`), which is what the Windows caption-button overlay gets sized to below. */
-const TITLE_BAR_HEIGHT = 38;
+const TITLE_BAR_HEIGHT = 36;
 
 /**
- * Matches the dark-mode default (`InitColorSchemeScript defaultMode="dark"`,
- * `src/app/layout.tsx`) — specifically `background.paper`/`text.primary`
- * (`palette.neutral[900]`/`[100]`, `src/theme/tokens.ts`), since that's the
- * in-page title bar's own background. Updated live on theme toggle via
- * `window:set-titlebar-overlay` (`src/components/layout/window-title-bar.tsx`).
+ * Kiyro is dark-only (`theme/theme.ts` — no light scheme, no toggle), so
+ * this is set once at window creation and never touched again — matches
+ * `background.paper`/`text.primary` (`palette.neutral[900]`/`[100]`,
+ * `src/theme/tokens.ts`), the in-page title bar's own background.
  */
-const DEFAULT_TITLE_BAR_OVERLAY: TitleBarOverlayPayload = {
+const DEFAULT_TITLE_BAR_OVERLAY = {
   color: '#111419',
   symbolColor: '#EAEDF1',
 };
@@ -214,7 +214,10 @@ async function createWindow(): Promise<void> {
   });
 
   if (app.isPackaged) {
-    await window.loadURL(`${APP_SCHEME}://kiyro/index.html`);
+    // Straight to Configure — there's no separate home/landing page
+    // (`src/app/page.tsx` just redirects here too, for the rare direct
+    // browser visit outside Electron); this skips that hop entirely.
+    await window.loadURL(`${APP_SCHEME}://kiyro/configure.html`);
   } else {
     await loadDevServer(window);
   }
@@ -263,19 +266,14 @@ if (!gotSingleInstanceLock) {
     // `ipc-handlers.ts` since these are window/app-chrome concerns, not
     // device/profile ones.
     ipcMain.handle(IpcChannel.WindowReload, () => mainWindow?.webContents.reload());
-    ipcMain.handle(IpcChannel.WindowForceReload, () => mainWindow?.webContents.reloadIgnoringCache());
+    ipcMain.handle(IpcChannel.WindowForceReload, () =>
+      mainWindow?.webContents.reloadIgnoringCache(),
+    );
     ipcMain.handle(IpcChannel.WindowToggleDevTools, () => mainWindow?.webContents.toggleDevTools());
     ipcMain.handle(IpcChannel.WindowToggleFullscreen, () => {
       if (mainWindow) mainWindow.setFullScreen(!mainWindow.isFullScreen());
     });
     ipcMain.handle(IpcChannel.WindowShowAbout, () => showAboutDialog());
-    ipcMain.handle(IpcChannel.WindowSetTitleBarOverlay, (_event, payload: TitleBarOverlayPayload) => {
-      // Windows/Linux only — macOS's `hiddenInset` traffic lights aren't an
-      // "overlay" in this sense and have no equivalent API.
-      if (process.platform !== 'darwin') {
-        mainWindow?.setTitleBarOverlay({ ...payload, height: TITLE_BAR_HEIGHT });
-      }
-    });
 
     const pipeline = new ExecutionPipeline(() => mainWindow);
     registerIpcHandlers(pipeline);

@@ -13,7 +13,6 @@ import { ConnectButton } from '@/features/connection/connect-button';
 import { ProfileSelector } from '@/features/profiles/profile-selector';
 import { SaveControls } from '@/features/editor/save-controls';
 import { useUiStore } from '@/stores/ui-store';
-import { ThemeToggle } from './theme-toggle';
 
 export function TopBar() {
   const pathname = usePathname();
@@ -73,8 +72,6 @@ export function TopBar() {
             </IconButton>
           </Tooltip>
         )}
-
-        <ThemeToggle />
       </Stack>
     </Box>
   );
