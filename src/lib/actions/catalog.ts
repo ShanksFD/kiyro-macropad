@@ -28,25 +28,11 @@ export interface ActionCategory {
 
 export const ACTION_CATEGORIES: readonly ActionCategory[] = [
   {
-    id: 'keyboard',
-    label: 'Keyboard',
-    description: 'Send a single key.',
+    id: 'application',
+    label: 'Application',
+    description: 'Launch or focus an application.',
     availability: 'available',
-    types: ['keyboard'],
-  },
-  {
-    id: 'hotkey',
-    label: 'Shortcut',
-    description: 'Send a key combination such as Ctrl + Shift + S.',
-    availability: 'available',
-    types: ['hotkey'],
-  },
-  {
-    id: 'text',
-    label: 'Text',
-    description: 'Type a stored snippet of text.',
-    availability: 'available',
-    types: ['text'],
+    types: ['application'],
   },
   {
     id: 'media',
@@ -56,25 +42,40 @@ export const ACTION_CATEGORIES: readonly ActionCategory[] = [
     types: ['media', 'volume'],
   },
   {
-    id: 'mouse',
-    label: 'Mouse',
-    description: 'Scrolling and mouse buttons.',
+    id: 'hotkey',
+    label: 'Shortcut',
+    description: 'Send a key combination such as Ctrl + Shift + S.',
     availability: 'available',
-    types: ['scroll', 'mouse'],
+    types: ['hotkey'],
   },
   {
     id: 'system',
     label: 'System',
     description: 'Lock, sleep and screen capture.',
-    availability: 'planned',
+    availability: 'available',
     types: ['system'],
   },
   {
-    id: 'application',
-    label: 'Application',
-    description: 'Launch or focus an application.',
+    id: 'keyboard',
+    label: 'Keyboard',
+    description: 'Send a single key.',
     availability: 'available',
-    types: ['application'],
+    types: ['keyboard'],
+  },
+  {
+    id: 'text',
+    label: 'Text',
+    description: 'Type a stored snippet of text.',
+    availability: 'available',
+    types: ['text'],
+  },
+
+  {
+    id: 'mouse',
+    label: 'Mouse',
+    description: 'Scrolling and mouse buttons.',
+    availability: 'available',
+    types: ['scroll', 'mouse'],
   },
 ];
 
@@ -92,8 +93,11 @@ export const ACTION_AVAILABILITY: Record<ActionType, ActionAvailability> = {
   media: 'available',
   volume: 'available',
   scroll: 'available',
-  mouse: 'planned',
-  system: 'planned',
+  // Both fully implemented in `electron/native-execution.ts` — these were
+  // still marked 'planned' after the fact, which falsely showed "saved but
+  // cannot run yet" on already-working bindings.
+  mouse: 'available',
+  system: 'available',
   application: 'available',
 };
 

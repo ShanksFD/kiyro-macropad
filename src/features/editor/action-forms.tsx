@@ -174,7 +174,6 @@ export function ActionForm({ action, onChange }: FormProps) {
               </MenuItem>
             ))}
           </TextField>
-          <PlannedNotice />
         </Stack>
       );
 
@@ -197,7 +196,12 @@ export function ActionForm({ action, onChange }: FormProps) {
               </MenuItem>
             ))}
           </TextField>
-          <PlannedNotice />
+          {action.command === 'sleep' && (
+            <Alert severity="info" variant="outlined">
+              Sends the same signal the hardware Sleep key would. Whether the computer actually
+              sleeps depends on its power-plan settings, same as pressing that key would.
+            </Alert>
+          )}
         </Stack>
       );
 
@@ -430,13 +434,5 @@ function StepSlider({
         onChange={(_event, next) => onChange(Array.isArray(next) ? (next[0] ?? 1) : next)}
       />
     </Stack>
-  );
-}
-
-function PlannedNotice() {
-  return (
-    <Alert severity="warning" variant="outlined">
-      This action type is planned. It can be configured and exported, but nothing executes it yet.
-    </Alert>
   );
 }

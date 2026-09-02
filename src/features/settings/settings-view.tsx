@@ -86,10 +86,9 @@ export function SettingsView() {
 
       <Paper variant="outlined" sx={{ px: 5 }}>
         <Stack divider={<Divider />}>
-          <Section title="General" description="Layout density. Kiyro is dark-only.">
+          <Section title="General" description="Layout density">
             <TextField
               select
-              label="Density"
               value={preferences.density}
               onChange={(event) =>
                 setPreference('density', event.target.value as Preferences['density'])

@@ -5,10 +5,9 @@
  * VK tables and dispatch mirror `host/kiyro_host/execution.py::execute_action`
  * 1:1 (that file stays the proven reference; nothing here changes it).
  * `keyboard`/`hotkey`/`media`/`volume` are solid ports. `mouse`/`scroll`,
- * `text`, and `application` are new (the Python reference left them
- * unimplemented) but follow the same "explicit unavailable, never silently
- * no-op" discipline for anything not confidently implementable — `system`
- * stays unavailable.
+ * `text`, `application`, and `system` are new (the Python reference left
+ * them unimplemented) but follow the same "explicit unavailable, never
+ * silently no-op" discipline for anything not confidently implementable.
  */
 
 import { shell } from 'electron';
@@ -38,7 +37,12 @@ const VK_UP = 0x26;
 const VK_RIGHT = 0x27;
 const VK_DOWN = 0x28;
 const VK_DELETE = 0x2e;
+const VK_L = 0x4c;
 const VK_LWIN = 0x5b;
+/** The dedicated hardware Sleep key. Synthesizing it asks Windows to sleep the same way the physical key would — whether anything actually happens depends on the machine's own power-plan/OEM support, same as pressing the real key would. */
+const VK_SLEEP = 0x5f;
+/** Print Screen. Alone it copies to the clipboard; combined with the Windows key (below) Windows 10/11 auto-saves it to Pictures\Screenshots instead. */
+const VK_SNAPSHOT = 0x2c;
 const VK_VOLUME_MUTE = 0xad;
 const VK_VOLUME_DOWN = 0xae;
 const VK_VOLUME_UP = 0xaf;
@@ -61,6 +65,10 @@ const CODE_TO_VK: Record<string, number> = {
   ArrowRight: VK_RIGHT,
   Home: VK_HOME,
   End: VK_END,
+  // Selectable in `KeySelect` (`@/lib/actions/keys.ts`) but had no VK entry
+  // here until now — the "Print Screen" preset (`presets.ts`) silently
+  // failed as unavailable at execution time despite looking configured.
+  PrintScreen: VK_SNAPSHOT,
   PageUp: VK_PRIOR,
   PageDown: VK_NEXT,
 };
@@ -220,8 +228,32 @@ export class NativeActionExecutor implements ActionExecutor {
         void launchApplication(action);
         return { status: 'executed', by: this.id };
 
-      case 'system':
-        return unavailable(`action type '${action.type}' is not implemented yet`, controlId);
+      case 'system': {
+        switch (action.command) {
+          case 'lock':
+            // Win+L — the standard Windows lock shortcut, same mechanism as
+            // any other hotkey binding, just hardcoded instead of user-chosen.
+            void combo([VK_LWIN], VK_L);
+            return { status: 'executed', by: this.id };
+          case 'sleep':
+            void tap(VK_SLEEP);
+            return { status: 'executed', by: this.id };
+          case 'screenshot':
+            // Win+PrintScreen, not plain PrintScreen — saves a file to
+            // Pictures\Screenshots automatically instead of only copying to
+            // the clipboard with nothing visible having happened.
+            void combo([VK_LWIN], VK_SNAPSHOT);
+            return { status: 'executed', by: this.id };
+          default:
+            // Unreachable as long as `SYSTEM_COMMANDS` (types.ts) and this
+            // switch agree — TS proves that by narrowing `action` to `never`
+            // here, which is also why this can't reference `action.command`
+            // for the message (that's the actual point of the narrowing: a
+            // future new command added to one but not the other becomes a
+            // compile error here instead of a silent runtime gap).
+            return unavailable('unknown system command', controlId);
+        }
+      }
 
       default:
         return unavailable('unrecognised action type');

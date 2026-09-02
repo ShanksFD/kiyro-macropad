@@ -114,6 +114,6 @@ export const ESP32C3_MACROPAD: DeviceDefinition = {
   },
   layout: { rows: 3, columns: COLUMNS },
   buttons,
-  encoders: [encoder(1, 'Encoder 1'), encoder(2, 'Encoder 2')],
+  encoders: [encoder(1, 'Knob 1'), encoder(2, 'Knob 2')],
   serialFilters: [{ usbVendorId: 0x303a, usbProductId: 0x1001 }],
 };

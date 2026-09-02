@@ -2,8 +2,7 @@
 
 import Box from '@mui/material/Box';
 import Stack from '@mui/material/Stack';
-import Typography from '@mui/material/Typography';
-import Chip from '@mui/material/Chip';
+
 import type { BindingMap } from '@/lib/actions/types';
 import type { DeviceDefinition } from '@/lib/devices/types';
 import { vars } from '@/theme/theme';
@@ -16,7 +15,6 @@ interface Props {
   bindings: BindingMap;
   selectedControlId: string | null;
   onSelectControl: (controlId: string) => void;
-  /** Test mode: print the firmware code on each cap instead of its index. */
   showEventCodes?: boolean;
   connected?: boolean;
 }
@@ -33,7 +31,6 @@ export function MacroPadView({
   selectedControlId,
   onSelectControl,
   showEventCodes = false,
-  connected = false,
 }: Props) {
   return (
     <Box
@@ -47,22 +44,6 @@ export function MacroPadView({
         backgroundImage: `radial-gradient(120% 90% at 50% -20%, ${vars(theme).palette.action.hover}, transparent 60%)`,
       })}
     >
-      <Stack
-        direction="row"
-
-        sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 4, px: 1 }}
-      >
-        <Typography variant="caption" sx={{ color: 'device.legendMuted', fontWeight: 620 }}>
-          {device.name}
-        </Typography>
-        <Chip
-          size="small"
-          variant="outlined"
-          label={connected ? 'Live' : 'Offline'}
-          sx={{ color: 'device.legendMuted', borderColor: 'device.keycapEdge' }}
-        />
-      </Stack>
-
       <Stack
         direction={{ xs: 'column', sm: 'row' }}
         spacing={3}

@@ -115,7 +115,6 @@ export function ConfigureView() {
               selectedControlId={selectedControlId}
               onSelectControl={select}
               showEventCodes={testMode || showRawEvents}
-              connected={connected}
             />
             {testMode && <TestModePanel device={device} />}
           </Stack>

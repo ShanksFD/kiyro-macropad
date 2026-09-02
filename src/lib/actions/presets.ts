@@ -70,6 +70,14 @@ export const ACTION_PRESETS: readonly ActionPreset[] = [
   preset('previous-track', 'Previous Track', { type: 'media', command: 'previous' }, 'back music'),
   preset('scroll-up', 'Scroll Up', { type: 'scroll', direction: 'up', amount: 3 }, 'wheel'),
   preset('scroll-down', 'Scroll Down', { type: 'scroll', direction: 'down', amount: 3 }, 'wheel'),
+  preset('lock-screen', 'Lock Screen', { type: 'system', command: 'lock' }, 'win l windows lock'),
+  preset('sleep', 'Sleep', { type: 'system', command: 'sleep' }, 'suspend power'),
+  preset(
+    'screenshot',
+    'Screenshot',
+    { type: 'system', command: 'screenshot' },
+    'screen capture snip win print',
+  ),
   // Same built-in apps as the "Application" tab's own quick-picks
   // (`app-launch-presets.ts`) — kept in one place, spread in here so they're
   // reachable from the top search box too, like every other preset.

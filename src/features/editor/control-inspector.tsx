@@ -153,7 +153,16 @@ export function ControlInspector({ device }: { device: DeviceDefinition }) {
 
         <Divider />
 
-        <ActionPicker value={action} onChange={handleChange} />
+        {/* `key` forces a full remount on every control switch — ActionPicker
+            keeps its own `category` tab as local state, initialised once
+            from `value` and never re-synced afterwards. Without this, moving
+            from a bound control (say System) to a fresh unbound one (whose
+            action is `{ type: 'none' }`, a type `categoryOfAction` doesn't
+            recognise and returns `null` for) left the stale `category` from
+            the *previous* control selected, while the form itself read the
+            new `{ type: 'none' }` value and fell into its "pick a category"
+            fallback — the exact two mismatched lines this fixes. */}
+        <ActionPicker key={selectedControlId} value={action} onChange={handleChange} />
       </Stack>
     </Paper>
   );
