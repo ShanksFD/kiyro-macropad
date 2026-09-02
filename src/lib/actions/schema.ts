@@ -42,9 +42,10 @@ export const actionSchema: z.ZodType<Action> = z.discriminatedUnion('type', [
     type: z.literal('application'),
     // Allowed to be empty: the form starts blank and is still a valid draft.
     label: z.string().max(64),
-    // Stored verbatim and never executed by the web app — a companion host is
-    // responsible for deciding whether a target may be launched.
     target: z.string().max(512),
+    // Defaults to 'path' so a profile saved before this field existed still
+    // validates — those were always an absolute path or blank.
+    kind: z.enum(['path', 'uri']).default('path'),
   }),
 ]);
 

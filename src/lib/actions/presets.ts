@@ -1,3 +1,4 @@
+import { APP_LAUNCH_PRESETS } from './app-launch-presets';
 import { describeAction } from './format';
 import type { Action } from './types';
 
@@ -69,6 +70,10 @@ export const ACTION_PRESETS: readonly ActionPreset[] = [
   preset('previous-track', 'Previous Track', { type: 'media', command: 'previous' }, 'back music'),
   preset('scroll-up', 'Scroll Up', { type: 'scroll', direction: 'up', amount: 3 }, 'wheel'),
   preset('scroll-down', 'Scroll Down', { type: 'scroll', direction: 'down', amount: 3 }, 'wheel'),
+  // Same built-in apps as the "Application" tab's own quick-picks
+  // (`app-launch-presets.ts`) — kept in one place, spread in here so they're
+  // reachable from the top search box too, like every other preset.
+  ...APP_LAUNCH_PRESETS.map((item) => preset(`app-${item.id}`, item.label, item.action, 'app launch open')),
 ];
 
 export function searchPresets(query: string): ActionPreset[] {

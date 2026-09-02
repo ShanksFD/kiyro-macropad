@@ -13,13 +13,17 @@ import {
   IconAdjustments,
   IconAlertCircle,
   IconActivity,
+  IconAlt,
   IconApps,
+  IconArrowBigUpLine,
   IconArrowBackUp,
   IconArrowRight,
   IconArrowsVertical,
   IconBan,
+  IconBrandWindows,
   IconCaretDownFilled,
   IconCheck,
+  IconChevronUp,
   IconCircleCheck,
   IconClipboard,
   IconClock,
@@ -32,6 +36,7 @@ import {
   IconEdit,
   IconExternalLink,
   IconFlask,
+  IconFolder,
   IconHandClick,
   IconHelpCircle,
   IconKeyboard,
@@ -66,12 +71,15 @@ import {
 import { createTablerIcon } from './create-tabler-icon';
 
 export const AddIcon = createTablerIcon(IconPlus);
+export const AltIcon = createTablerIcon(IconAlt);
 export const AppsIcon = createTablerIcon(IconApps);
+export const BrandWindowsIcon = createTablerIcon(IconBrandWindows);
 export const ArrowDropDownIcon = createTablerIcon(IconCaretDownFilled);
 export const ArrowForwardIcon = createTablerIcon(IconArrowRight);
 export const BlockIcon = createTablerIcon(IconBan);
 export const CableIcon = createTablerIcon(IconPlugConnected);
 export const CheckIcon = createTablerIcon(IconCheck);
+export const ChevronUpIcon = createTablerIcon(IconChevronUp);
 export const CheckCircleOutlineIcon = createTablerIcon(IconCircleCheck);
 export const ClearIcon = createTablerIcon(IconX);
 export const CloseIcon = createTablerIcon(IconX);
@@ -85,6 +93,7 @@ export const DriveFileRenameOutlineIcon = createTablerIcon(IconEdit);
 export const EditNoteIcon = createTablerIcon(IconNotes);
 export const ErrorOutlineIcon = createTablerIcon(IconAlertCircle);
 export const ExpandMoreIcon = createTablerIcon(IconCaretDownFilled);
+export const FolderIcon = createTablerIcon(IconFolder);
 export const FiberManualRecordIcon = createTablerIcon(IconPointFilled);
 export const HelpOutlineIcon = createTablerIcon(IconHelpCircle);
 export const KeyboardIcon = createTablerIcon(IconKeyboard);
@@ -120,3 +129,4 @@ export const UploadIcon = createTablerIcon(IconUpload);
 export const UsbIcon = createTablerIcon(IconUsb);
 export const UsbOffIcon = createTablerIcon(IconPlugOff);
 export const VolumeUpIcon = createTablerIcon(IconVolume);
+export const ArrowBigUpLine = createTablerIcon(IconArrowBigUpLine);

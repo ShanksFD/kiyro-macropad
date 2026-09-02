@@ -43,6 +43,7 @@ const Channel = {
   WindowToggleDevTools: 'kiyro:window:toggle-devtools',
   WindowToggleFullscreen: 'kiyro:window:toggle-fullscreen',
   WindowShowAbout: 'kiyro:window:show-about',
+  AppsBrowseExecutable: 'kiyro:apps:browse-executable',
 } as const;
 
 function on<T>(channel: string, callback: (payload: T) => void): () => void {
@@ -81,6 +82,10 @@ const kiyroBridge: KiyroBridge = {
     toggleDevTools: (): Promise<void> => ipcRenderer.invoke(Channel.WindowToggleDevTools),
     toggleFullscreen: (): Promise<void> => ipcRenderer.invoke(Channel.WindowToggleFullscreen),
     showAbout: (): Promise<void> => ipcRenderer.invoke(Channel.WindowShowAbout),
+  },
+  apps: {
+    browseForExecutable: (): Promise<string | null> =>
+      ipcRenderer.invoke(Channel.AppsBrowseExecutable),
   },
   platform: process.platform as 'win32' | 'darwin' | 'linux',
 };

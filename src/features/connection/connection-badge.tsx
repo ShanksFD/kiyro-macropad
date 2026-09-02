@@ -7,6 +7,7 @@ import Typography from '@mui/material/Typography';
 import CircularProgress from '@mui/material/CircularProgress';
 import { UsbOffIcon, UsbIcon, ErrorOutlineIcon, BlockIcon, ScienceIcon } from '@/components/icons';
 import { CONNECTION_LABELS, useDeviceStore } from '@/stores/device-store';
+import { palette } from '@/theme/tokens';
 
 const DOT_COLOUR = {
   connected: 'success.main',
@@ -67,16 +68,8 @@ export function ConnectionBadge() {
       <Stack
         direction="row"
         spacing={2.5}
-
         sx={{
           alignItems: 'center',
-          px: 3,
-          py: 1.5,
-          borderRadius: 2.5,
-          border: 1,
-          borderColor: 'divider',
-          minWidth: 0,
-          maxWidth: 340,
         }}
       >
         <Box
@@ -108,7 +101,7 @@ export function ConnectionBadge() {
             variant="caption"
             color="text.secondary"
             noWrap
-            sx={{ lineHeight: 1.3, maxWidth: 260 }}
+            sx={{ lineHeight: 1.3, maxWidth: 260, fontSize: '0.7rem' }}
           >
             {status === 'connected' ? (device?.name ?? 'Macro pad') : detail}
           </Typography>

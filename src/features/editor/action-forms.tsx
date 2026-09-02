@@ -1,6 +1,10 @@
 'use client';
 
 import Alert from '@mui/material/Alert';
+import Box from '@mui/material/Box';
+import Button from '@mui/material/Button';
+import ButtonBase from '@mui/material/ButtonBase';
+import Chip from '@mui/material/Chip';
 import MenuItem from '@mui/material/MenuItem';
 import Slider from '@mui/material/Slider';
 import Stack from '@mui/material/Stack';
@@ -8,6 +12,15 @@ import TextField from '@mui/material/TextField';
 import ToggleButton from '@mui/material/ToggleButton';
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import Typography from '@mui/material/Typography';
+import {
+  AltIcon,
+  ArrowBigUpLine,
+  BrandWindowsIcon,
+  ChevronUpIcon,
+  FolderIcon,
+  KeyboardCommandKeyIcon,
+} from '@/components/icons';
+import { APP_LAUNCH_PRESETS } from '@/lib/actions/app-launch-presets';
 import { MEDIA_LABELS, SCROLL_LABELS, SYSTEM_LABELS, VOLUME_LABELS } from '@/lib/actions/catalog';
 import { MODIFIERS, modifierLabel } from '@/lib/actions/keys';
 import type { Modifier } from '@/lib/actions/keys';
@@ -19,6 +32,9 @@ import {
   VOLUME_COMMANDS,
 } from '@/lib/actions/types';
 import type { Action } from '@/lib/actions/types';
+import { useKiyroBridge } from '@/hooks/use-kiyro-bridge';
+import { fontStack } from '@/theme/theme';
+import { radius } from '@/theme/tokens';
 import { KeySelect } from './key-select';
 import { ShortcutRecorder } from './shortcut-recorder';
 
@@ -42,7 +58,7 @@ export function ActionForm({ action, onChange }: FormProps) {
       return (
         <Stack spacing={3}>
           <TextField
-            label="Text"
+            placeholder="Text"
             multiline
             minRows={3}
             maxRows={8}
@@ -62,7 +78,7 @@ export function ActionForm({ action, onChange }: FormProps) {
       return (
         <TextField
           select
-          label="Media command"
+
           value={action.command}
           onChange={(event) =>
             onChange({
@@ -84,7 +100,6 @@ export function ActionForm({ action, onChange }: FormProps) {
         <Stack spacing={3}>
           <TextField
             select
-            label="Volume command"
             value={action.command}
             onChange={(event) =>
               onChange({
@@ -116,7 +131,6 @@ export function ActionForm({ action, onChange }: FormProps) {
         <Stack spacing={3}>
           <TextField
             select
-            label="Direction"
             value={action.direction}
             onChange={(event) =>
               onChange({
@@ -169,7 +183,6 @@ export function ActionForm({ action, onChange }: FormProps) {
         <Stack spacing={3}>
           <TextField
             select
-            label="System command"
             value={action.command}
             onChange={(event) =>
               onChange({
@@ -189,23 +202,7 @@ export function ActionForm({ action, onChange }: FormProps) {
       );
 
     case 'application':
-      return (
-        <Stack spacing={3}>
-          <TextField
-            label="Name"
-            value={action.label}
-            onChange={(event) => onChange({ ...action, label: event.target.value })}
-          />
-          <TextField
-            label="Target"
-            placeholder="Application path or URL"
-            value={action.target}
-            onChange={(event) => onChange({ ...action, target: event.target.value })}
-            helperText="Stored as text. Kiyro never launches it from the browser."
-          />
-          <PlannedNotice />
-        </Stack>
-      );
+      return <ApplicationForm action={action} onChange={onChange} />;
 
     default:
       return (
@@ -216,6 +213,117 @@ export function ActionForm({ action, onChange }: FormProps) {
   }
 }
 
+/**
+ * `kind: 'path'` needs an exact file location (a "Browse…" native picker is
+ * the reliable way to get one right — see `main.ts`'s `AppsBrowseExecutable`
+ * handler); `kind: 'uri'` is a URL or a registered custom protocol, so it's
+ * just a text field. The preset row (`app-launch-presets.ts`) is the
+ * extensible part — add an app there, it shows up here automatically.
+ */
+function ApplicationForm({
+  action,
+  onChange,
+}: {
+  action: Extract<Action, { type: 'application' }>;
+  onChange: (action: Action) => void;
+}) {
+  const kiyro = useKiyroBridge();
+
+  const browse = async () => {
+    const path = await kiyro?.apps.browseForExecutable();
+    if (!path) return;
+    const inferredName =
+      path
+        .split(/[/\\]/)
+        .pop()
+        ?.replace(/\.[^.]+$/, '') ?? path;
+    onChange({
+      type: 'application',
+      label: action.label || inferredName,
+      target: path,
+      kind: 'path',
+    });
+  };
+
+  return (
+    <Stack spacing={3}>
+      <Stack spacing={1.5}>
+        <Typography variant="caption" color="text.secondary">
+          Quick pick
+        </Typography>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
+          {APP_LAUNCH_PRESETS.map((preset) => (
+            <Chip
+              key={preset.id}
+              label={preset.label}
+              onClick={() => onChange(preset.action)}
+              variant={action.target === preset.action.target ? 'filled' : 'outlined'}
+              color={action.target === preset.action.target ? 'primary' : 'default'}
+              clickable
+            />
+          ))}
+        </Box>
+      </Stack>
+
+      <TextField
+        value={action.label}
+        placeholder="Name"
+        onChange={(event) => onChange({ ...action, label: event.target.value })}
+      />
+
+      <ToggleButtonGroup
+        exclusive
+        size="small"
+        value={action.kind}
+        onChange={(_event, kind: 'path' | 'uri' | null) => {
+          if (kind) onChange({ ...action, kind, target: '' });
+        }}
+        aria-label="Target type"
+      >
+        <ToggleButton value="path" sx={{ px: 3, textTransform: 'none' }}>
+          App on this computer
+        </ToggleButton>
+        <ToggleButton value="uri" sx={{ px: 3, textTransform: 'none' }}>
+          Website or link
+        </ToggleButton>
+      </ToggleButtonGroup>
+
+      {action.kind === 'path' ? (
+        <Stack direction="row" spacing={2}>
+          <TextField
+            placeholder="Path to executable"
+            value={action.target}
+            onChange={(event) => onChange({ ...action, target: event.target.value })}
+            sx={{ flex: 1 }}
+          />
+          <Button
+            variant="outlined"
+            startIcon={<FolderIcon />}
+            onClick={() => void browse()}
+            sx={{ flexShrink: 0 }}
+          >
+            Browse…
+          </Button>
+        </Stack>
+      ) : (
+        <TextField
+          label="URL or link"
+          placeholder="https://example.com or discord://"
+          value={action.target}
+          onChange={(event) => onChange({ ...action, target: event.target.value })}
+        />
+      )}
+    </Stack>
+  );
+}
+
+/** Control has no universal glyph — a thin caret is the closest real keycap convention (macOS prints literally that for it). Meta is platform-specific, handled separately below. */
+const MODIFIER_ICON: Record<Exclude<Modifier, 'Meta'>, React.ComponentType<{ sx?: object }>> = {
+  Control: ChevronUpIcon,
+  Shift: ArrowBigUpLine,
+  Alt: AltIcon,
+};
+
 function HotkeyForm({
   action,
   onChange,
@@ -223,6 +331,9 @@ function HotkeyForm({
   action: Extract<Action, { type: 'hotkey' }>;
   onChange: (action: Action) => void;
 }) {
+  const platform = useKiyroBridge()?.platform;
+  const MetaIcon = platform === 'darwin' ? KeyboardCommandKeyIcon : BrandWindowsIcon;
+
   return (
     <Stack spacing={3}>
       <ShortcutRecorder
@@ -235,18 +346,56 @@ function HotkeyForm({
         <Typography variant="caption" color="text.secondary">
           Modifiers
         </Typography>
-        <ToggleButtonGroup
-          size="small"
-          value={action.modifiers}
-          onChange={(_event, modifiers: Modifier[]) => onChange({ ...action, modifiers })}
-          aria-label="Modifier keys"
-        >
-          {MODIFIERS.map((modifier) => (
-            <ToggleButton key={modifier} value={modifier} sx={{ px: 3, textTransform: 'none' }}>
-              {modifierLabel(modifier)}
-            </ToggleButton>
-          ))}
-        </ToggleButtonGroup>
+        <Box role="group" aria-label="Modifier keys" sx={{ display: 'flex', gap: 1.5 }}>
+          {MODIFIERS.map((modifier) => {
+            const Icon = modifier === 'Meta' ? MetaIcon : MODIFIER_ICON[modifier];
+            const selected = action.modifiers.includes(modifier);
+            return (
+              <ButtonBase
+                key={modifier}
+                focusRipple
+                aria-pressed={selected}
+                onClick={() =>
+                  onChange({
+                    ...action,
+                    modifiers: selected
+                      ? action.modifiers.filter((item) => item !== modifier)
+                      : [...action.modifiers, modifier],
+                  })
+                }
+                sx={(theme) => ({
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 1,
+                  width: 68,
+                  height: 68,
+                  borderRadius: `${radius.md}px`,
+                  fontFamily: fontStack,
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                  color: 'device.legend',
+                  bgcolor: selected ? 'device.keycapAssigned' : 'device.keycap',
+                  border: '1px solid',
+                  borderColor: selected ? 'primary.main' : 'device.keycapEdge',
+                  '&:hover': { bgcolor: selected ? 'device.keycapAssigned' : 'device.keycapHover' },
+                  '&.Mui-focusVisible': {
+                    outline: '2px solid',
+                    outlineColor: 'primary.main',
+                    outlineOffset: 2,
+                  },
+                  transition: theme.transitions.create(['background-color', 'border-color'], {
+                    duration: theme.transitions.duration.shorter,
+                  }),
+                })}
+              >
+                <Icon sx={{ fontSize: 16 }} />
+                {modifierLabel(modifier)}
+              </ButtonBase>
+            );
+          })}
+        </Box>
       </Stack>
 
       <KeySelect value={action.key} onChange={(key) => onChange({ ...action, key })} />

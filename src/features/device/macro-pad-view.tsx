@@ -41,14 +41,9 @@ export function MacroPadView({
         p: { xs: 4, lg: 6 },
         borderRadius: `${radius.xl}px`,
         bgcolor: 'device.chassis',
-        border: '1px solid',
-        borderColor: 'device.chassisEdge',
-        boxShadow: 'none',
-        maxWidth: 760,
         width: '100%',
         mx: 'auto',
         overflow: 'hidden',
-        // A faint sheen so the body reads as a moulded surface, not a panel.
         backgroundImage: `radial-gradient(120% 90% at 50% -20%, ${vars(theme).palette.action.hover}, transparent 60%)`,
       })}
     >

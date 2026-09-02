@@ -7,7 +7,6 @@
  */
 
 export const palette = {
-  /** Neutral ramp — warm-neutral graphite, tuned for long editing sessions. */
   neutral: {
     0: '#FFFFFF',
     25: '#FAFBFC',
@@ -24,47 +23,36 @@ export const palette = {
     900: '#111419',
     950: '#0B0E12',
   },
-  /** The single product accent. Fill-first; `accentInk` is the text-safe tone. */
   accent: {
-    main: '#FF603F',
-    dark: '#D9432A',
-    light: '#FF8F73',
-    inkOnLight: '#C23D22',
-    inkOnDark: '#FFAB93',
+    main: '#1196FF',
+    dark: '#0f87e9',
+    light: '#61B8FF',
+    inkOnLight: '#006DBD',
+    inkOnDark: '#B8DEFF',
   },
   success: { main: '#12B76A', dark: '#0E9155', light: '#4ED89B' },
   warning: { main: '#F79009', dark: '#C56A06', light: '#FDB44B' },
   error: { main: '#E5484D', dark: '#C13539', light: '#F27377' },
-  info: { main: '#5B8DEF', dark: '#3F6FCC', light: '#8FB2F5' },
+  info: {
+    main: '#1196FF',
+    dark: '#0A5998',
+    light: '#61B8FF',
+  },
 } as const;
 
-export const radius = {
-  sm: 6,
-  md: 10,
-  lg: 14,
-  xl: 20,
-  pill: 999,
-} as const;
-
-export const duration = {
-  instant: 90,
-  fast: 140,
-  base: 220,
-  slow: 380,
-} as const;
-
+export const radius = { xs: 3, sm: 6, md: 10, lg: 14, xl: 20, pill: 999 } as const;
+export const duration = { instant: 90, fast: 140, base: 220, slow: 380 } as const;
 export const easing = {
   out: 'cubic-bezier(0.16, 1, 0.3, 1)',
-  inOut: 'cubic-bezier(0.65, 0, 0.35, 1)',
+  inOut: 'cubic-bezier(0.65, 0.35, 1)',
+  easeInOut: 'cubic-bezier(0.4, 0, 0.2, 1)',
 } as const;
 
-/** Fixed chrome dimensions for the application shell. */
 export const layout = {
   sidebarWidth: 232,
   sidebarCollapsedWidth: 72,
   topBarHeight: 60,
-  /** The Electron window's own frameless title bar (`window-title-bar.tsx`) — kept in sync with `electron/main.ts`'s `TITLE_BAR_HEIGHT`, which can't import this file directly (outside the electron `tsconfig.json`'s include list). */
   windowTitleBarHeight: 38,
-  inspectorWidth: 400,
+  inspectorWidth: 700,
   contentMaxWidth: 1680,
 } as const;

@@ -73,7 +73,7 @@ export const ACTION_CATEGORIES: readonly ActionCategory[] = [
     id: 'application',
     label: 'Application',
     description: 'Launch or focus an application.',
-    availability: 'planned',
+    availability: 'available',
     types: ['application'],
   },
 ];
@@ -94,7 +94,7 @@ export const ACTION_AVAILABILITY: Record<ActionType, ActionAvailability> = {
   scroll: 'available',
   mouse: 'planned',
   system: 'planned',
-  application: 'planned',
+  application: 'available',
 };
 
 export function isPlannedAction(action: Action): boolean {
@@ -170,7 +170,7 @@ export function defaultActionOfType(type: ActionType): Action {
     case 'system':
       return { type: 'system', command: 'lock' };
     case 'application':
-      return { type: 'application', label: '', target: '' };
+      return { type: 'application', label: '', target: '', kind: 'path' };
     default:
       return { type: 'none' };
   }

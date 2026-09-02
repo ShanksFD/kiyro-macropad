@@ -33,8 +33,14 @@ export type Action =
   | { type: 'mouse'; button: MouseButton }
   /** Planned. */
   | { type: 'system'; command: SystemCommand }
-  /** Planned. */
-  | { type: 'application'; label: string; target: string };
+  /**
+   * Launches or focuses an application. `kind` says how `target` is opened:
+   * `'path'` is an absolute file path (an .exe, typically chosen via the
+   * native file picker), run through `shell.openPath`; `'uri'` is a URL or
+   * a registered custom protocol (`https://…`, `discord://`, `vscode://`),
+   * run through `shell.openExternal`. See `electron/native-execution.ts`.
+   */
+  | { type: 'application'; label: string; target: string; kind: 'path' | 'uri' };
 
 export type ActionType = Action['type'];
 

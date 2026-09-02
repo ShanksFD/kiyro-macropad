@@ -18,6 +18,8 @@ import { useEditorStore } from '@/stores/editor-store';
 import { useUiStore } from '@/stores/ui-store';
 import { ActionIcon } from './action-icon';
 import { ActionPicker } from './action-picker';
+import { radius } from '@/theme/tokens';
+import { theme, vars } from '@/theme/theme';
 
 const CONFIDENCE_COPY = {
   verified: null,
@@ -44,7 +46,15 @@ export function ControlInspector({ device }: { device: DeviceDefinition }) {
 
   if (!control || !selectedControlId || !action) {
     return (
-      <Paper variant="outlined" sx={{ p: 6, height: '100%' }}>
+      <Paper
+        sx={{
+          p: { xs: 4, lg: 6 },
+          height: '100%',
+          borderRadius: `${radius.xl}px`,
+          bgcolor: 'device.chassis',
+          backgroundImage: `radial-gradient(120% 90% at 50% -20%, ${vars(theme).palette.action.hover}, transparent 60%)`,
+        }}
+      >
         <Stack
           spacing={3}
           sx={{ alignItems: 'center', justifyContent: 'center', height: '100%', py: 8 }}
@@ -72,7 +82,15 @@ export function ControlInspector({ device }: { device: DeviceDefinition }) {
   const handleChange = (next: Action) => setAction(selectedControlId, next);
 
   return (
-    <Paper variant="outlined" sx={{ p: 5, height: '100%', overflow: 'auto' }}>
+    <Paper
+      sx={{
+        p: { xs: 4, lg: 6 },
+        borderRadius: `${radius.xl}px`,
+        bgcolor: 'device.chassis',
+        height: '100%',
+        overflow: 'auto',
+      }}
+    >
       <Stack spacing={4}>
         <Stack spacing={2}>
           <Stack

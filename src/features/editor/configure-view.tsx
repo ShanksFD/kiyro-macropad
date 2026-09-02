@@ -10,6 +10,7 @@ import DialogContent from '@mui/material/DialogContent';
 import DialogContentText from '@mui/material/DialogContentText';
 import DialogTitle from '@mui/material/DialogTitle';
 import FormControlLabel from '@mui/material/FormControlLabel';
+import Grid from '@mui/material/Grid';
 import Stack from '@mui/material/Stack';
 import Switch from '@mui/material/Switch';
 import Typography from '@mui/material/Typography';
@@ -94,38 +95,36 @@ export function ConfigureView() {
         <SaveControls />
       </Box>
 
-      <ExecutionNotice />
+      <Stack spacing={3}>
+        <ExecutionNotice />
 
-      {!connected && (
-        <Alert severity="info" variant="outlined">
-          No macro pad connected. You can still edit this profile — connect a device to see keys
-          light up as you press them.
-        </Alert>
-      )}
-
-      <Stack direction={{ xs: 'column', lg: 'row' }} spacing={6} sx={{ alignItems: 'flex-start' }}>
-        <Stack spacing={5} sx={{ flex: 1, minWidth: 0, width: '100%' }}>
-          <MacroPadView
-            device={device}
-            bindings={draft}
-            selectedControlId={selectedControlId}
-            onSelectControl={select}
-            showEventCodes={testMode || showRawEvents}
-            connected={connected}
-          />
-          {testMode && <TestModePanel device={device} />}
-        </Stack>
-
-        <Box
-          sx={{
-            width: { xs: '100%', lg: layout.inspectorWidth },
-            flexShrink: 0,
-            top: 84,
-          }}
-        >
-          <ControlInspector device={device} />
-        </Box>
+        {!connected && (
+          <Alert severity="info" variant="outlined">
+            No macro pad connected. You can still edit this profile — connect a device to see keys
+            light up as you press them.
+          </Alert>
+        )}
       </Stack>
+
+      <Grid container spacing={4} sx={{ alignItems: 'flex-start' }}>
+        <Grid size={{ xs: 12, lg: 6 }}>
+          <Stack spacing={4}>
+            <MacroPadView
+              device={device}
+              bindings={draft}
+              selectedControlId={selectedControlId}
+              onSelectControl={select}
+              showEventCodes={testMode || showRawEvents}
+              connected={connected}
+            />
+            {testMode && <TestModePanel device={device} />}
+          </Stack>
+        </Grid>
+
+        <Grid size={{ xs: 12, lg: 6 }}>
+          <ControlInspector device={device} />
+        </Grid>
+      </Grid>
 
       <Dialog open={resetOpen} onClose={() => setResetOpen(false)} maxWidth="xs" fullWidth>
         <DialogTitle>Reset profile?</DialogTitle>

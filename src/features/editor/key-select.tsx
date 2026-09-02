@@ -12,7 +12,7 @@ interface Props {
 }
 
 /** Grouped, searchable key picker over the canonical key catalogue. */
-export function KeySelect({ value, onChange, label = 'Key' }: Props) {
+export function KeySelect({ value, onChange }: Props) {
   const selected = findKey(value) ?? null;
 
   return (
@@ -24,7 +24,7 @@ export function KeySelect({ value, onChange, label = 'Key' }: Props) {
       isOptionEqualToValue={(option, current) => option.id === current.id}
       disableClearable
       onChange={(_event, option) => onChange(option.id)}
-      renderInput={(params) => <TextField {...params} label={label} />}
+      renderInput={(params) => <TextField {...params} />}
       slotProps={{ listbox: { sx: { maxHeight: 280 } } }}
     />
   );

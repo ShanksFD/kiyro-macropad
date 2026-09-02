@@ -4,18 +4,21 @@
  *
  * VK tables and dispatch mirror `host/kiyro_host/execution.py::execute_action`
  * 1:1 (that file stays the proven reference; nothing here changes it).
- * `keyboard`/`hotkey`/`media`/`volume` are solid ports. `mouse`/`scroll` and
- * `text` are new (the Python reference left them unimplemented) but follow the
- * same "explicit unavailable, never silently no-op" discipline for anything
- * not confidently implementable — `system`/`application` stay unavailable.
+ * `keyboard`/`hotkey`/`media`/`volume` are solid ports. `mouse`/`scroll`,
+ * `text`, and `application` are new (the Python reference left them
+ * unimplemented) but follow the same "explicit unavailable, never silently
+ * no-op" discipline for anything not confidently implementable — `system`
+ * stays unavailable.
  */
 
+import { shell } from 'electron';
 import type {
   ActionExecutor,
   ExecutionAvailability,
   ExecutionOutcome,
   ExecutionRequest,
 } from '../src/lib/execution/executor';
+import type { Action } from '../src/lib/actions/types';
 import { sendKeyEvent, sendMouseClick, sendMouseWheel, sendUnicodeChar } from './win-sendinput';
 
 const VK_BACK = 0x08;
@@ -114,6 +117,39 @@ async function typeText(text: string): Promise<void> {
 }
 
 /**
+ * `kind: 'path'` (an exact file, normally chosen via the native file picker
+ * — see `main.ts`'s `AppsBrowseExecutable` handler) goes through
+ * `shell.openPath`, which asks the OS to open it however it normally would
+ * (an .exe just runs). `kind: 'uri'` (a URL or a registered custom
+ * protocol like `discord://`/`vscode://`) goes through `shell.openExternal`
+ * — `openPath` does not understand protocol schemes, and `openExternal`
+ * does not understand bare file paths, so which one to call is not
+ * optional. Their failure signals differ too — `openPath` resolves with an
+ * error *string* and never rejects, `openExternal` rejects with an `Error` —
+ * so both need handling, not just one. Either way this only ever logs; it
+ * can't change the fire-and-forget contract every other case here already
+ * has (see the doc comment on `execute`).
+ */
+async function launchApplication(action: Extract<Action, { type: 'application' }>): Promise<void> {
+  const target = action.target.trim();
+  if (target === '') return;
+  const name = action.label || target;
+
+  try {
+    if (action.kind === 'uri') {
+      // Resolves on success, *rejects* on failure — unlike `openPath` below.
+      await shell.openExternal(target);
+    } else {
+      // Resolves with '' on success, or an error string on failure — never rejects.
+      const error = await shell.openPath(target);
+      if (error) throw new Error(error);
+    }
+  } catch (error) {
+    console.error(`[kiyro] failed to launch '${name}' (${action.kind}):`, error);
+  }
+}
+
+/**
  * The real executor: Electron's main process, not a browser tab. Reported
  * unavailable only for action types this pass does not implement.
  */
@@ -179,8 +215,12 @@ export class NativeActionExecutor implements ActionExecutor {
         sendMouseWheel(action.direction, action.amount);
         return { status: 'executed', by: this.id };
 
-      case 'system':
       case 'application':
+        if (action.target.trim() === '') return unavailable('no application configured', controlId);
+        void launchApplication(action);
+        return { status: 'executed', by: this.id };
+
+      case 'system':
         return unavailable(`action type '${action.type}' is not implemented yet`, controlId);
 
       default:

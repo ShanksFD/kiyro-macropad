@@ -36,7 +36,7 @@
  * first instance to show its window instead.
  */
 
-import { app, BrowserWindow, ipcMain, Menu, nativeImage, net, protocol } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, net, protocol } from 'electron';
 import type { Tray } from 'electron';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -274,6 +274,26 @@ if (!gotSingleInstanceLock) {
       if (mainWindow) mainWindow.setFullScreen(!mainWindow.isFullScreen());
     });
     ipcMain.handle(IpcChannel.WindowShowAbout, () => showAboutDialog());
+
+    // Backs the "Browse…" button in the Application action form
+    // (`action-forms.tsx`) — the only reliable way to bind an exact install
+    // location, since every machine installs things somewhere different.
+    ipcMain.handle(IpcChannel.AppsBrowseExecutable, async () => {
+      if (!mainWindow) return null;
+      const result = await dialog.showOpenDialog(mainWindow, {
+        title: 'Choose an application',
+        properties: ['openFile'],
+        filters:
+          process.platform === 'win32'
+            ? [
+                { name: 'Applications', extensions: ['exe', 'lnk', 'bat', 'cmd'] },
+                { name: 'All files', extensions: ['*'] },
+              ]
+            : [{ name: 'All files', extensions: ['*'] }],
+      });
+      if (result.canceled || result.filePaths.length === 0) return null;
+      return result.filePaths[0] ?? null;
+    });
 
     const pipeline = new ExecutionPipeline(() => mainWindow);
     registerIpcHandlers(pipeline);

@@ -38,6 +38,7 @@ export const IpcChannel = {
   WindowToggleDevTools: 'kiyro:window:toggle-devtools',
   WindowToggleFullscreen: 'kiyro:window:toggle-fullscreen',
   WindowShowAbout: 'kiyro:window:show-about',
+  AppsBrowseExecutable: 'kiyro:apps:browse-executable',
 } as const;
 
 /** Pushed from main whenever the real serial connection's state changes. */
@@ -110,6 +111,15 @@ export interface KiyroBridge {
     toggleDevTools(): Promise<void>;
     toggleFullscreen(): Promise<void>;
     showAbout(): Promise<void>;
+  };
+  apps: {
+    /**
+     * Native "pick an application" file dialog — the reliable way to bind an
+     * exact install location for an `'application'`/`kind: 'path'` action
+     * (`src/lib/actions/types.ts`), since every machine installs things
+     * somewhere different. Resolves `null` if the user cancels.
+     */
+    browseForExecutable(): Promise<string | null>;
   };
   /** So the renderer can lay out its own title bar around the OS's caption buttons/traffic lights, which sit on opposite sides. */
   platform: 'win32' | 'darwin' | 'linux';

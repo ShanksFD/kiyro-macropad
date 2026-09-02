@@ -9,6 +9,8 @@ import { FiberManualRecordIcon } from '@/components/icons';
 import { keyLabel, modifierLabel } from '@/lib/actions/keys';
 import type { Modifier } from '@/lib/actions/keys';
 import { useShortcutRecorder } from '@/hooks/use-shortcut-recorder';
+import { palette, radius } from '@/theme/tokens';
+import { alpha } from '@mui/material';
 
 interface Props {
   modifiers: Modifier[];
@@ -32,10 +34,8 @@ export function ShortcutRecorder({ modifiers, keyCode, onChange }: Props) {
           minHeight: 56,
           px: 3,
           py: 2.5,
-          borderRadius: 2.5,
-          border: '1px dashed',
-          borderColor: recording ? 'primary.main' : 'divider',
-          bgcolor: recording ? 'action.selected' : 'transparent',
+          borderRadius: `${radius.md}px`,
+          bgcolor: recording ? alpha(palette.error.main, 0.25) : 'device.keycap',
           display: 'flex',
           alignItems: 'center',
           gap: 1.5,
@@ -49,7 +49,14 @@ export function ShortcutRecorder({ modifiers, keyCode, onChange }: Props) {
         )}
 
         {shown.map((modifier) => (
-          <Chip key={modifier} label={modifierLabel(modifier)} />
+          <Chip
+            key={modifier}
+            variant="outlined"
+            sx={{
+              bgcolor: 'device.keycapEdge',
+            }}
+            label={modifierLabel(modifier)}
+          />
         ))}
 
         {!recording && (
@@ -57,7 +64,7 @@ export function ShortcutRecorder({ modifiers, keyCode, onChange }: Props) {
             label={keyLabel(keyCode)}
             color="primary"
             variant="outlined"
-            sx={{ fontWeight: 650 }}
+            sx={{ fontWeight: 650, bgcolor: 'device.keycapEdge' }}
           />
         )}
       </Box>
@@ -70,7 +77,7 @@ export function ShortcutRecorder({ modifiers, keyCode, onChange }: Props) {
         ) : (
           <Button
             variant="outlined"
-            startIcon={<FiberManualRecordIcon sx={{ fontSize: 12 }} />}
+            startIcon={<FiberManualRecordIcon color="error" sx={{ fontSize: 12 }} />}
             onClick={start}
           >
             Record shortcut

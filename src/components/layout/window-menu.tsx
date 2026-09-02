@@ -6,6 +6,7 @@ import Divider from '@mui/material/Divider';
 import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
 import { useKiyroBridge } from '@/hooks/use-kiyro-bridge';
+import { radius } from '@/theme/tokens';
 
 /**
  * Replaces the native OS application menu's View/Help entries — the window
@@ -43,13 +44,13 @@ export function WindowMenu() {
   const buttonSx = {
     minWidth: 0,
     px: 2.5,
-    py: 0,
+    py: 0.5,
     height: 'auto',
     minHeight: 'auto',
     fontSize: '0.8125rem',
     fontWeight: 500,
     color: 'text.secondary',
-    borderRadius: 1,
+    borderRadius: `${radius.sm}px`,
     '&:hover': { color: 'text.primary', bgcolor: 'action.hover' },
   } as const;
 
