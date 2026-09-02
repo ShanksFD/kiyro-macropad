@@ -35,9 +35,6 @@ function isElectron(): boolean {
 let lastPushedSignature: string | null = null;
 
 function pushActiveProfileToElectron(profile: MacroProfile | null): void {
-  // TEMP DIAGNOSTIC (4): whether this even runs, and why it might bail out
-  // early — every branch below is logged so a silent no-op is impossible to
-  // miss.
   const electronPresent = isElectron();
   if (!electronPresent || !profile) {
     console.log(
@@ -88,9 +85,6 @@ function pushActiveProfileToElectron(profile: MacroProfile | null): void {
  */
 export function useAppBootstrap(): void {
   useEffect(() => {
-    // TEMP DIAGNOSTIC: whether/when this mount effect runs at all, and
-    // whether window.kiyro is already present the instant it does (it
-    // should always be — preload runs before any page script).
     console.log(`[kiyro][diag] mount effect running (wired=${wired}, window.kiyro present=${isElectron()})`);
     if (wired) return;
     wired = true;
@@ -111,8 +105,6 @@ export function useAppBootstrap(): void {
       .then(() => {
         const { profiles, activeProfileId } = useProfileStore.getState();
         const restored = profiles.find((profile) => profile.id === activeProfileId) ?? null;
-        // TEMP DIAGNOSTIC (3): what hydration actually resolved to, right
-        // before attempting to push it.
         console.log(
           `[kiyro][diag] post-hydrate restored profile: ${restored ? `id=${restored.id} bindingKeys=[${Object.keys(restored.bindings).join(', ')}]` : 'null'}`,
         );

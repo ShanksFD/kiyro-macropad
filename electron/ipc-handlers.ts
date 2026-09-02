@@ -13,10 +13,6 @@ import { electronPreferencesStorage } from './preferences-storage';
 import type { ExecutionPipeline } from './execution-pipeline';
 
 export function registerIpcHandlers(pipeline: ExecutionPipeline): void {
-  // TEMP DIAGNOSTIC: anchors every other timestamped log against "IPC is
-  // wired up" — this always runs inside `app.whenReady()`, before
-  // `createWindow()`/`loadURL` even starts, so it should be the very first
-  // `[kiyro]` line every launch.
   console.log('[kiyro][diag] IPC handlers registered');
 
   ipcMain.handle(IpcChannel.ConnectRequest, () => {
@@ -30,9 +26,6 @@ export function registerIpcHandlers(pipeline: ExecutionPipeline): void {
   });
 
   ipcMain.handle(IpcChannel.SetActiveProfile, (_event, payload: SetActiveProfilePayload) => {
-    // TEMP DIAGNOSTIC: confirms the IPC call actually arrived at main, as
-    // opposed to never being sent (or being sent and silently rejected)
-    // from the renderer.
     console.log(
       `[kiyro][diag] IPC ${IpcChannel.SetActiveProfile} received: profileId=${payload.profileId} updatedAt=${payload.updatedAt} bindingKeys=[${Object.keys(payload.bindings).join(', ')}]`,
     );

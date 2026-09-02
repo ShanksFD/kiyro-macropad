@@ -207,9 +207,6 @@ async function createWindow(): Promise<void> {
   window.webContents.on('did-finish-load', () => {
     window.webContents.setZoomFactor(1);
     window.webContents.setVisualZoomLevelLimits(1, 1).catch(() => undefined);
-    // TEMP DIAGNOSTIC (kept from the persistence investigation, not yet
-    // removed): timestamp anchor for "the page (and therefore preload) just
-    // (re)loaded".
     console.log('[kiyro][diag] did-finish-load fired');
   });
 

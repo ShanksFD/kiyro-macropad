@@ -44,8 +44,6 @@ export class ExecutionPipeline {
 
       if (resolution.status === 'mapped') {
         const action = this.profiles.getBinding(resolution.controlId);
-        // TEMP DIAGNOSTIC: exactly which profile (if any) the resolver is
-        // actually holding at the moment a physical button fires.
         console.log(
           `[kiyro][diag] button resolved to ${resolution.controlId}; ActiveProfileStore.profileId=${this.profiles.profileId}; binding=${action ? JSON.stringify(action) : 'none'}`,
         );

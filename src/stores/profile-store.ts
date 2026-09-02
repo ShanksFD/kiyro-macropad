@@ -68,7 +68,6 @@ export const useProfileStore = create<ProfileStore>((set, get) => ({
     console.log(`[kiyro][diag] hydrate() starting, repository=${usingElectron ? 'electron' : 'localStorage'}`);
 
     const stored = await getProfileRepository().list();
-    // TEMP DIAGNOSTIC (1): profiles loaded, straight from the repository.
     console.log(
       `[kiyro][diag] profiles loaded: count=${stored.length} ids=[${stored.map((p) => p.id).join(', ')}]`,
     );
@@ -79,7 +78,6 @@ export const useProfileStore = create<ProfileStore>((set, get) => ({
     const storedActive = await readActiveId();
     const activeProfileId =
       profiles.find((profile) => profile.id === storedActive)?.id ?? profiles[0]?.id ?? null;
-    // TEMP DIAGNOSTIC (2): the resolved active profile id vs. what was on disk.
     console.log(`[kiyro][diag] resolved activeProfileId=${activeProfileId} (storedActive was ${storedActive})`);
 
     // `storedActive` can be missing or stale (first run, or it pointed at a
