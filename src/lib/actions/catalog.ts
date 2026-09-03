@@ -239,7 +239,10 @@ export function defaultActionOfType(type: ActionType): Action {
     case 'profile':
       return { type: 'profile', command: 'next' };
     case 'discord':
-      return { type: 'discord', command: 'toggleMute' };
+      // `step` is only meaningful for `micVolumeUp`/`micVolumeDown`, but
+      // seeded here regardless so switching to one of those commands
+      // already has a sensible value instead of starting undefined.
+      return { type: 'discord', command: 'toggleMute', step: 10 };
     default:
       return { type: 'none' };
   }

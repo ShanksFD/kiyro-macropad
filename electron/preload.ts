@@ -58,6 +58,7 @@ const Channel = {
   UpdaterQuitAndInstall: 'kiyro:updater:quit-and-install',
   UpdaterStatus: 'kiyro:updater:status',
   DiscordConnect: 'kiyro:discord:connect',
+  DiscordDisconnect: 'kiyro:discord:disconnect',
   DiscordStatus: 'kiyro:discord:status',
 } as const;
 
@@ -120,6 +121,7 @@ const kiyroBridge: KiyroBridge = {
   },
   discord: {
     connect: (): Promise<DiscordStatusPayload> => ipcRenderer.invoke(Channel.DiscordConnect),
+    disconnect: (): Promise<void> => ipcRenderer.invoke(Channel.DiscordDisconnect),
     onStatus: (callback: (payload: DiscordStatusPayload) => void) =>
       on(Channel.DiscordStatus, callback),
   },

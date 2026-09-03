@@ -87,8 +87,13 @@ export type Action =
    * Handled the same way `profile` is: intercepted in
    * `electron/execution-pipeline.ts` rather than the OS-level executor,
    * since it talks to Discord over IPC instead of pressing anything.
+   *
+   * `step` only means anything for `micVolumeUp`/`micVolumeDown` (ignored
+   * otherwise) — and unlike the OS `volume` action's `step`, this is a
+   * direct percentage of Discord's own 0–100 input-volume slider, not a
+   * count of hardware notches: `step: 10` moves it by 10%.
    */
-  | { type: 'discord'; command: DiscordCommand }
+  | { type: 'discord'; command: DiscordCommand; step?: number }
   /**
    * Launches or focuses an application. `kind` says how `target` is opened:
    * `'path'` is an absolute file path (an .exe, typically chosen via the

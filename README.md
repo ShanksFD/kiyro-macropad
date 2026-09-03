@@ -234,11 +234,27 @@ KIYRO_DISCORD_CLIENT_SECRET=<see below>    # only if shipping the Discord integr
 npm run dist:win:publish
 ```
 
-`dist:win:publish` builds, then runs `electron-builder --win --publish
-always`, which uploads the installer and its update metadata to a GitHub
-Release tagged with `package.json`'s `version` — bump that first. Existing
+`dist:win:publish` builds, tags (`scripts/tag-release.mjs`), runs
+`electron-builder --win --publish always` (uploads the installer to a
+**draft** GitHub Release), then `scripts/publish-github-release.mjs`
+publishes that draft — bump `package.json`'s `version` first. Existing
 installs pick it up on their next background check (or immediately, via Help
 → Check for Updates…).
+
+Publishing happens in that separate step *after* the build, not via
+electron-builder's own `releaseType: "release"` config, on purpose:
+electron-builder uploads the installer and its differential-update
+`.blockmap` as two concurrent tasks, and each independently checks whether a
+release already exists for the tag before creating one — the first upload
+for a version, both see "no" and both try to create it. Draft releases
+tolerate that fine (GitHub allows more than one draft to share a tag), but
+`releaseType: "release"` does not, and the loser gets rejected outright,
+which also silently cancels the pending upload of `latest.yml` — the file
+`electron-updater` needs to find an update at all. `nsis.differentialPackage:
+false` removes the concurrent `.blockmap` upload that caused this (the
+tradeoff: updates now download the full installer instead of a small delta),
+and publishing as a separate, sequential step afterward avoids the race
+entirely rather than just tolerating it.
 
 **For local dev/testing, `.env.local` is more convenient than pasting these
 every session** (see `.env.local.example`): copy it to `.env.local` (already

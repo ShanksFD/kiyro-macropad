@@ -110,16 +110,16 @@ export class ExecutionPipeline {
       // Also fire-and-forget: connecting (and, the very first time, the
       // Discord consent prompt) is async, and a bound key must return
       // immediately the same as every other binding does.
-      void this.#runDiscordCommand(action.command);
+      void this.#runDiscordCommand(action);
       return { status: 'executed', by: 'kiyro-pipeline' };
     }
 
     return nativeActionExecutor.execute({ controlId, action, at });
   }
 
-  async #runDiscordCommand(command: Extract<Action, { type: 'discord' }>['command']): Promise<void> {
+  async #runDiscordCommand(action: Extract<Action, { type: 'discord' }>): Promise<void> {
     try {
-      switch (command) {
+      switch (action.command) {
         case 'toggleMute':
           await discordRpcClient.toggleMute();
           break;
@@ -127,17 +127,17 @@ export class ExecutionPipeline {
           await discordRpcClient.toggleDeafen();
           break;
         case 'micVolumeUp':
-          await discordRpcClient.adjustMicVolume(1);
+          await discordRpcClient.adjustMicVolume(1, action.step ?? 10);
           break;
         case 'micVolumeDown':
-          await discordRpcClient.adjustMicVolume(-1);
+          await discordRpcClient.adjustMicVolume(-1, action.step ?? 10);
           break;
       }
     } catch (error) {
       // Never surfaced beyond the log — most likely cause is simply "Discord
       // isn't running right now," which is a normal, expected state (not
       // every key press happens while voice-chatting), not a Kiyro error.
-      console.error(`[kiyro] discord ${command} failed:`, error);
+      console.error(`[kiyro] discord ${action.command} failed:`, error);
     }
   }
 

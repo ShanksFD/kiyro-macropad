@@ -80,6 +80,16 @@ export function SettingsView() {
     else if (result === 'unconfigured') notify('This build has no Discord integration configured.', 'warning');
   };
 
+  const disconnectDiscord = async () => {
+    if (!kiyro) return;
+    await kiyro.discord.disconnect();
+    // The main process also pushes this over `onStatus`, but setting it
+    // directly here means the button's own disabled state updates in the
+    // same tick rather than waiting on that round trip.
+    setDiscordStatus('disconnected');
+    notify('Disconnected from Discord.', 'info');
+  };
+
   const toggle = (key: keyof Preferences, label: string, help?: string) => (
     <FormControlLabel
       control={
@@ -150,6 +160,11 @@ export function SettingsView() {
               <Button variant="outlined" disabled={discordBusy} onClick={() => void connectDiscord()}>
                 {discordStatus === 'connected' ? 'Reconnect' : 'Connect to Discord'}
               </Button>
+              {discordStatus === 'connected' && (
+                <Button variant="outlined" color="inherit" onClick={() => void disconnectDiscord()}>
+                  Disconnect
+                </Button>
+              )}
             </Stack>
             <Alert severity="info" variant="outlined">
               A Discord action connects on its own the first time it’s pressed, even without doing

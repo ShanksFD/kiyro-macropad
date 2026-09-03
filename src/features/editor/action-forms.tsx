@@ -226,7 +226,11 @@ export function ActionForm({ action, onChange }: FormProps) {
             value={action.command}
             onChange={(event) =>
               onChange({
-                type: 'discord',
+                // Spreads `action` (keeps `step`) rather than constructing a
+                // fresh object — switching from Toggle Mute to Mic Volume Up
+                // shouldn't reset a step the user may have already set on an
+                // earlier volume command.
+                ...action,
                 command: event.target.value as (typeof DISCORD_COMMANDS)[number],
               })
             }
@@ -237,6 +241,15 @@ export function ActionForm({ action, onChange }: FormProps) {
               </MenuItem>
             ))}
           </TextField>
+
+          {(action.command === 'micVolumeUp' || action.command === 'micVolumeDown') && (
+            <StepSlider
+              label={`Step — ${action.step ?? 10}% per press`}
+              value={action.step ?? 10}
+              max={100}
+              onChange={(step) => onChange({ ...action, step })}
+            />
+          )}
         </Stack>
       );
 

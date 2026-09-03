@@ -61,7 +61,6 @@ const HANDSHAKE_TIMEOUT_MS = 2000;
 const COMMAND_TIMEOUT_MS = 8000;
 /** Refresh this long before actual expiry, so a command mid-flight never races an access token dying under it. */
 const REFRESH_MARGIN_MS = 60_000;
-const MIC_VOLUME_STEP = 10;
 
 export type DiscordStatus =
   | 'disconnected'
@@ -158,6 +157,19 @@ export class DiscordRpcClient {
       this.#connecting = null;
     });
     return this.#connecting;
+  }
+
+  /**
+   * Closes the live pipe connection. Deliberately does *not* forget the
+   * stored OAuth tokens (`discord-token-storage.ts`) — this is "stop talking
+   * to Discord for now," not "revoke Kiyro's access." A later `connect()`
+   * (or the next `discord` action pressed) reconnects using the same stored
+   * tokens with no new consent prompt, exactly like the first connection
+   * silently resuming after Discord itself restarts.
+   */
+  disconnect(): void {
+    this.#teardown();
+    this.#setStatus('disconnected');
   }
 
   async #doConnect(): Promise<void> {
@@ -402,12 +414,20 @@ export class DiscordRpcClient {
     await this.#setVoiceSettings({ deaf: !current.deaf });
   }
 
-  /** `direction` is `1` for up, `-1` for down. Clamped to Discord's normal (non-boosted) 0–100 range. */
-  async adjustMicVolume(direction: 1 | -1): Promise<void> {
+  /**
+   * `direction` is `1` for up, `-1` for down. `step` is how many
+   * percentage points one press moves — unlike the OS-level `volume`
+   * action's `step` (Windows notches of ~2% each), this is a direct
+   * percentage of Discord's own 0–100 input-volume slider, so `step: 10`
+   * really does mean "move by 10%." Clamped to Discord's normal
+   * (non-boosted) 0–100 range regardless of what's passed in.
+   */
+  async adjustMicVolume(direction: 1 | -1, step: number): Promise<void> {
     await this.connect();
     if (this.#status !== 'connected') throw new Error(`Discord not connected (${this.#status})`);
     const current = await this.#getVoiceSettings();
-    const next = Math.min(100, Math.max(0, current.input.volume + direction * MIC_VOLUME_STEP));
+    const clampedStep = Math.min(100, Math.max(1, Math.trunc(step)));
+    const next = Math.min(100, Math.max(0, current.input.volume + direction * clampedStep));
     await this.#setVoiceSettings({ input: { volume: next } });
   }
 }

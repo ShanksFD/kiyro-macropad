@@ -116,12 +116,18 @@ export function describeAction(action: Action): ActionLabel {
         full: `Profile · ${PROFILE_LABELS[action.command]}`,
       };
 
-    case 'discord':
+    case 'discord': {
+      // Only the two mic-volume commands carry a step — mute/deafen have
+      // nothing to show one for, so a plain "Discord" secondary/no
+      // qualifier there matches how `volume`'s mute case does the same.
+      const isVolumeCommand = action.command === 'micVolumeUp' || action.command === 'micVolumeDown';
+      const step = isVolumeCommand ? (action.step ?? 10) : null;
       return {
         primary: DISCORD_LABELS[action.command],
-        secondary: 'Discord',
-        full: `Discord · ${DISCORD_LABELS[action.command]}`,
+        secondary: step === null ? 'Discord' : `${step}%`,
+        full: `Discord · ${DISCORD_LABELS[action.command]}${step === null ? '' : ` (${step}%)`}`,
       };
+    }
 
     default:
       return { primary: '—', full: 'No action' };

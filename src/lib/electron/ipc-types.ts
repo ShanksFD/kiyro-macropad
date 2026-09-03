@@ -49,6 +49,7 @@ export const IpcChannel = {
   UpdaterQuitAndInstall: 'kiyro:updater:quit-and-install',
   UpdaterStatus: 'kiyro:updater:status',
   DiscordConnect: 'kiyro:discord:connect',
+  DiscordDisconnect: 'kiyro:discord:disconnect',
   DiscordStatus: 'kiyro:discord:status',
 } as const;
 
@@ -228,6 +229,8 @@ export interface KiyroBridge {
    */
   discord: {
     connect(): Promise<DiscordStatusPayload>;
+    /** Closes the live connection without forgetting Kiyro's saved authorization — a later `connect()` (or a bound action) silently reconnects with no new approval prompt. */
+    disconnect(): Promise<void>;
     onStatus(callback: (payload: DiscordStatusPayload) => void): () => void;
   };
   /** So the renderer can lay out its own title bar around the OS's caption buttons/traffic lights, which sit on opposite sides. */

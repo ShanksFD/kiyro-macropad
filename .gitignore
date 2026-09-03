@@ -12,3 +12,5 @@ electron/discord-secret.ts
 *.tsbuildinfo
 next-env.d.ts
 coverage
+# Ad-hoc debug output redirected from a publish run — never meant to be committed.
+build-log*.txt

@@ -358,6 +358,7 @@ if (!gotSingleInstanceLock) {
     // (`execution-pipeline.ts`). Auto-connecting at every launch would mean
     // that prompt can appear before anyone asked for it.
     ipcMain.handle(IpcChannel.DiscordConnect, () => discordRpcClient.connect().then(() => discordRpcClient.status));
+    ipcMain.handle(IpcChannel.DiscordDisconnect, () => discordRpcClient.disconnect());
     discordRpcClient.onStatusChange((status) => {
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send(IpcChannel.DiscordStatus, status);

@@ -41,7 +41,11 @@ export const actionSchema: z.ZodType<Action> = z.discriminatedUnion('type', [
   z.object({ type: z.literal('mouse'), button: z.enum(MOUSE_BUTTONS) }),
   z.object({ type: z.literal('system'), command: z.enum(SYSTEM_COMMANDS) }),
   z.object({ type: z.literal('profile'), command: z.enum(PROFILE_COMMANDS) }),
-  z.object({ type: z.literal('discord'), command: z.enum(DISCORD_COMMANDS) }),
+  z.object({
+    type: z.literal('discord'),
+    command: z.enum(DISCORD_COMMANDS),
+    step: z.number().int().min(1).max(100).optional(),
+  }),
   z.object({
     type: z.literal('application'),
     // Allowed to be empty: the form starts blank and is still a valid draft.
