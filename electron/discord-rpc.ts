@@ -311,7 +311,27 @@ export class DiscordRpcClient {
         ? await this.#refreshTokens(stored.refreshToken)
         : await this.#authorizeFresh();
 
-    await this.#sendCommand('AUTHENTICATE', { access_token: tokens.accessToken });
+    try {
+      await this.#sendCommand('AUTHENTICATE', { access_token: tokens.accessToken });
+    } catch (error) {
+      // A token that looked fresh by our own `expiresAt` bookkeeping can
+      // still be rejected here — the common real-world cause is the user
+      // revoking Kiyro's access from Discord's own Authorized Apps
+      // settings, which invalidates it immediately regardless of what our
+      // stored expiry says. `#refreshTokens` already handles this
+      // correctly when *it's* the one that gets rejected (clears the
+      // stored tokens and re-authorizes); this is the same recovery for
+      // when the stale token fails right here instead, on the branch that
+      // skipped refreshing entirely because it didn't look expired yet.
+      // Without this, a revoked-but-not-yet-expired token made every future
+      // "Connect" click fail silently — no popup, no error the user could
+      // see, just back to "Not connected" — since nothing here used to
+      // retry, only give up.
+      console.warn('[kiyro][discord] stored access token rejected, re-authorizing:', error);
+      await discordTokenStorage.clear();
+      const fresh = await this.#authorizeFresh();
+      await this.#sendCommand('AUTHENTICATE', { access_token: fresh.accessToken });
+    }
   }
 
   async #authorizeFresh(): Promise<DiscordTokens> {

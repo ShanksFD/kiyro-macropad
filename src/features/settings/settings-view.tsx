@@ -78,6 +78,14 @@ export function SettingsView() {
     if (result === 'connected') notify('Connected to Discord.', 'success');
     else if (result === 'unavailable') notify('Discord isn’t running.', 'warning');
     else if (result === 'unconfigured') notify('This build has no Discord integration configured.', 'warning');
+    // Any other outcome (chiefly `'disconnected'` — authorization itself
+    // failed, e.g. a rejected or revoked token) used to show nothing at
+    // all: the chip just silently stayed "Not connected" with no
+    // explanation, indistinguishable from the button not having done
+    // anything. Catching it here rather than enumerating every possible
+    // failure by name means a *future* failure mode can't go silent the
+    // same way again either.
+    else notify('Could not connect to Discord — see the console for details.', 'error');
   };
 
   const disconnectDiscord = async () => {
