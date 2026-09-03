@@ -44,6 +44,7 @@ import { buildMacAppMenu, showAboutDialog } from './menu';
 import { createTray, setTrayConnected } from './tray';
 import { ExecutionPipeline } from './execution-pipeline';
 import { registerIpcHandlers } from './ipc-handlers';
+import { discordRpcClient } from './discord-rpc';
 import { AppUpdater } from './updater';
 import { listInstalledBrowsers } from './win-browsers';
 import * as keyboardCapture from './win-keyboard-hook';
@@ -350,6 +351,18 @@ if (!gotSingleInstanceLock) {
     ipcMain.handle(IpcChannel.UpdaterCheck, () => updater.check());
     ipcMain.handle(IpcChannel.UpdaterDownload, () => updater.download());
     ipcMain.handle(IpcChannel.UpdaterQuitAndInstall, () => updater.quitAndInstall());
+
+    // No `.connect()` call here on purpose, unlike the updater above — a
+    // bound `discord` action connects (and, the first time, shows Discord's
+    // consent prompt) lazily on its own when actually pressed
+    // (`execution-pipeline.ts`). Auto-connecting at every launch would mean
+    // that prompt can appear before anyone asked for it.
+    ipcMain.handle(IpcChannel.DiscordConnect, () => discordRpcClient.connect().then(() => discordRpcClient.status));
+    discordRpcClient.onStatusChange((status) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send(IpcChannel.DiscordStatus, status);
+      }
+    });
 
     tray = createTray({
       onOpen: () => {

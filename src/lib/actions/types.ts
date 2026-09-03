@@ -43,6 +43,19 @@ export const PROFILE_COMMANDS = ['next', 'previous'] as const;
 export type ProfileCommand = (typeof PROFILE_COMMANDS)[number];
 
 /**
+ * Voice controls over Discord's own local IPC connection
+ * (`electron/discord-rpc.ts`) — not a synthesized keystroke, a real command
+ * to whatever Discord account is signed in on this machine. `toggleMute` and
+ * `toggleDeafen` flip whatever the current state is (Discord's API takes an
+ * explicit boolean, so the toggle itself is Kiyro reading the current state
+ * first); `micVolumeUp`/`micVolumeDown` step Discord's own input-volume
+ * slider, separate from — and not the same thing as — the OS-level `volume`
+ * action above.
+ */
+export const DISCORD_COMMANDS = ['toggleMute', 'toggleDeafen', 'micVolumeUp', 'micVolumeDown'] as const;
+export type DiscordCommand = (typeof DISCORD_COMMANDS)[number];
+
+/**
  * What a control does when it is triggered.
  *
  * A discriminated union so every consumer is forced to handle new action types
@@ -70,6 +83,12 @@ export type Action =
    * state instead of pressing anything.
    */
   | { type: 'profile'; command: ProfileCommand }
+  /**
+   * Handled the same way `profile` is: intercepted in
+   * `electron/execution-pipeline.ts` rather than the OS-level executor,
+   * since it talks to Discord over IPC instead of pressing anything.
+   */
+  | { type: 'discord'; command: DiscordCommand }
   /**
    * Launches or focuses an application. `kind` says how `target` is opened:
    * `'path'` is an absolute file path (an .exe, typically chosen via the

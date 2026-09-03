@@ -1,0 +1,415 @@
+/**
+ * A from-scratch client for Discord's local IPC ("RPC") protocol — the same
+ * mechanism Rich Presence integrations use, repurposed here for voice
+ * control (mute/deafen/mic volume) instead. No `discord-rpc` npm package:
+ * that library is unmaintained and pulls in more than this needs: the wire
+ * protocol itself is a small, stable, well-documented framing over a local
+ * named pipe, easy enough to speak directly.
+ *
+ * THE PROTOCOL
+ * ------------
+ * Discord listens on `\\.\pipe\discord-ipc-0` through `-9` (multiple Discord
+ * installs/instances claim consecutive indices) — a plain `net.Socket` in
+ * Node talks to a Windows named pipe the same way it talks to a TCP socket.
+ * Every message is a fixed 8-byte header (opcode: uint32 LE, length: uint32
+ * LE) followed by that many bytes of UTF-8 JSON. `#read()` below is the
+ * buffering parser for that, since TCP/pipe reads never line up with frame
+ * boundaries.
+ *
+ * The flow, end to end:
+ * 1. Send a HANDSHAKE frame `{v: 1, client_id}`. Discord answers with a
+ *    DISPATCH `READY` event — no command needed to ask for this.
+ * 2. Send an `AUTHORIZE` command (`scopes` include the *restricted*
+ *    `rpc.voice.read`/`rpc.voice.write` this feature needs — see the doc
+ *    comment on `DISCORD_CLIENT_SECRET`'s generator for what "restricted"
+ *    costs you). Discord shows its own native consent prompt inside the
+ *    already-open Discord app; approving it returns an OAuth `code`.
+ * 3. Exchange that `code` for `access_token`/`refresh_token` via a plain
+ *    HTTPS POST to Discord's OAuth token endpoint (`client_secret` required
+ *    here — this is the one place it's used). This is *not* a browser
+ *    redirect flow: the code already arrived over the pipe in step 2, so
+ *    there's nothing to redirect.
+ * 4. Send `AUTHENTICATE` with the `access_token` over the same pipe
+ *    connection to authorize this session.
+ * 5. Now `GET_VOICE_SETTINGS`/`SET_VOICE_SETTINGS` commands work.
+ *
+ * Steps 2–4 only happen once — after that, tokens are persisted
+ * (`discord-token-storage.ts`) and reused, refreshing the access token
+ * silently via `refresh_token` when it's near expiry, so nobody has to
+ * re-approve Kiyro in Discord every launch.
+ */
+
+import net from 'node:net';
+import { randomUUID } from 'node:crypto';
+import { DISCORD_CLIENT_SECRET } from './discord-secret';
+import { discordTokenStorage } from './discord-token-storage';
+import type { DiscordTokens } from './discord-token-storage';
+import { Listeners } from '../src/lib/serial/emitter';
+
+const CLIENT_ID = '1545072084122869832';
+/**
+ * Never actually navigated to — the authorization code comes back over the
+ * IPC pipe itself (see the class doc comment), not a browser redirect. Still
+ * has to be *a* URI registered in the Discord app's OAuth2 settings for the
+ * token exchange to be accepted.
+ */
+const REDIRECT_URI = 'http://localhost';
+
+const OPCODE = { HANDSHAKE: 0, FRAME: 1, CLOSE: 2, PING: 3, PONG: 4 } as const;
+const MAX_PIPE_INDEX = 9;
+const HANDSHAKE_TIMEOUT_MS = 2000;
+const COMMAND_TIMEOUT_MS = 8000;
+/** Refresh this long before actual expiry, so a command mid-flight never races an access token dying under it. */
+const REFRESH_MARGIN_MS = 60_000;
+const MIC_VOLUME_STEP = 10;
+
+export type DiscordStatus =
+  | 'disconnected'
+  | 'connecting'
+  | 'authorizing'
+  | 'connected'
+  /** No `discord-ipc-*` pipe answered — Discord isn't running. */
+  | 'unavailable'
+  /** This build has no `KIYRO_DISCORD_CLIENT_SECRET` baked in — see `scripts/generate-build-secrets.mjs`. */
+  | 'unconfigured';
+
+interface VoiceSettings {
+  mute: boolean;
+  deaf: boolean;
+  input: { volume: number };
+}
+
+interface PendingCommand {
+  resolve: (data: unknown) => void;
+  reject: (error: Error) => void;
+  timer: NodeJS.Timeout;
+}
+
+/** Buffers arbitrary-sized socket chunks into complete `{opcode, payload}` frames — reads never align to frame boundaries. */
+class FrameReader {
+  #buffer = Buffer.alloc(0);
+
+  push(chunk: Buffer): Array<{ opcode: number; payload: unknown }> {
+    this.#buffer = Buffer.concat([this.#buffer, chunk]);
+    const frames: Array<{ opcode: number; payload: unknown }> = [];
+
+    for (;;) {
+      if (this.#buffer.length < 8) break;
+      const opcode = this.#buffer.readUInt32LE(0);
+      const length = this.#buffer.readUInt32LE(4);
+      if (this.#buffer.length < 8 + length) break;
+
+      const body = this.#buffer.subarray(8, 8 + length);
+      this.#buffer = this.#buffer.subarray(8 + length);
+
+      try {
+        frames.push({ opcode, payload: body.length > 0 ? JSON.parse(body.toString('utf-8')) : null });
+      } catch (error) {
+        console.error('[kiyro][discord] malformed frame payload, dropping:', error);
+      }
+    }
+
+    return frames;
+  }
+}
+
+function encodeFrame(opcode: number, payload: unknown): Buffer {
+  const body = Buffer.from(JSON.stringify(payload), 'utf-8');
+  const header = Buffer.alloc(8);
+  header.writeUInt32LE(opcode, 0);
+  header.writeUInt32LE(body.length, 4);
+  return Buffer.concat([header, body]);
+}
+
+export class DiscordRpcClient {
+  #status: DiscordStatus = 'disconnected';
+  #socket: net.Socket | null = null;
+  #reader = new FrameReader();
+  #pending = new Map<string, PendingCommand>();
+  /** Serializes `connect()` calls — every action method calls it, and two overlapping attempts must not open two sockets. */
+  #connecting: Promise<void> | null = null;
+
+  readonly #statusListeners = new Listeners<DiscordStatus>();
+
+  get status(): DiscordStatus {
+    return this.#status;
+  }
+
+  onStatusChange(listener: (status: DiscordStatus) => void): () => void {
+    return this.#statusListeners.add(listener);
+  }
+
+  #setStatus(status: DiscordStatus): void {
+    if (this.#status === status) return;
+    this.#status = status;
+    this.#statusListeners.emit(status);
+  }
+
+  /**
+   * Connects and authorizes if needed. Idempotent and safe to call before
+   * every action — a no-op once already connected, and the thing that
+   * quietly re-establishes the pipe after Discord restarts.
+   */
+  async connect(): Promise<void> {
+    if (this.#status === 'connected') return;
+    if (this.#connecting) return this.#connecting;
+
+    this.#connecting = this.#doConnect().finally(() => {
+      this.#connecting = null;
+    });
+    return this.#connecting;
+  }
+
+  async #doConnect(): Promise<void> {
+    if (DISCORD_CLIENT_SECRET === '') {
+      this.#setStatus('unconfigured');
+      return;
+    }
+
+    this.#setStatus('connecting');
+
+    const socket = await this.#openPipe();
+    if (!socket) {
+      this.#setStatus('unavailable');
+      return;
+    }
+    this.#socket = socket;
+
+    try {
+      await this.#authorizeSession();
+      this.#setStatus('connected');
+    } catch (error) {
+      console.error('[kiyro][discord] authorization failed:', error);
+      this.#teardown();
+      this.#setStatus('disconnected');
+    }
+  }
+
+  /** Tries each candidate pipe in turn, keeping the first one that completes a handshake. */
+  async #openPipe(): Promise<net.Socket | null> {
+    for (let index = 0; index <= MAX_PIPE_INDEX; index += 1) {
+      // Sequential by design: only one Discord install is ever actually
+      // listening, and trying pipes concurrently would just race duplicate
+      // sockets against each other for no benefit.
+      const socket = await this.#tryPipe(`\\\\.\\pipe\\discord-ipc-${index}`);
+      if (socket) return socket;
+    }
+    return null;
+  }
+
+  #tryPipe(path: string): Promise<net.Socket | null> {
+    return new Promise((resolve) => {
+      const socket = net.createConnection({ path });
+      const reader = new FrameReader();
+      let settled = false;
+
+      const finish = (result: net.Socket | null) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        socket.removeAllListeners();
+        if (!result) socket.destroy();
+        resolve(result);
+      };
+
+      const timeout = setTimeout(() => finish(null), HANDSHAKE_TIMEOUT_MS);
+
+      socket.on('error', () => finish(null));
+      socket.on('close', () => finish(null));
+
+      socket.on('connect', () => {
+        socket.write(encodeFrame(OPCODE.HANDSHAKE, { v: 1, client_id: CLIENT_ID }));
+      });
+
+      socket.on('data', (chunk: Buffer) => {
+        for (const frame of reader.push(chunk)) {
+          const data = frame.payload as { evt?: string } | null;
+          if (frame.opcode === OPCODE.FRAME && data?.evt === 'READY') {
+            // Ownership of framing/dispatch moves to the instance-level
+            // handlers from here — remove this probe's own listeners without
+            // destroying the socket underneath them.
+            clearTimeout(timeout);
+            settled = true;
+            socket.removeAllListeners();
+            resolve(socket);
+          }
+        }
+      });
+    });
+  }
+
+  #wireLongLivedSocket(socket: net.Socket): void {
+    socket.on('data', (chunk: Buffer) => {
+      for (const frame of this.#reader.push(chunk)) this.#handleFrame(frame);
+    });
+    socket.on('close', () => {
+      console.log('[kiyro][discord] pipe closed');
+      this.#teardown();
+      this.#setStatus('disconnected');
+    });
+    socket.on('error', (error) => {
+      console.error('[kiyro][discord] socket error:', error);
+    });
+  }
+
+  #handleFrame(frame: { opcode: number; payload: unknown }): void {
+    if (frame.opcode !== OPCODE.FRAME) return;
+    const message = frame.payload as { nonce?: string; evt?: string; data?: unknown } | null;
+    if (!message?.nonce) return; // DISPATCH events with no nonce (only READY today) — nothing currently subscribes to these.
+
+    const pending = this.#pending.get(message.nonce);
+    if (!pending) return;
+    this.#pending.delete(message.nonce);
+    clearTimeout(pending.timer);
+
+    if (message.evt === 'ERROR') {
+      const errorData = message.data as { message?: string } | undefined;
+      pending.reject(new Error(errorData?.message ?? 'Discord RPC error'));
+    } else {
+      pending.resolve(message.data);
+    }
+  }
+
+  #sendCommand(cmd: string, args: unknown): Promise<unknown> {
+    if (!this.#socket) return Promise.reject(new Error('Discord RPC socket not open'));
+
+    const nonce = randomUUID();
+    const socket = this.#socket;
+
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.#pending.delete(nonce);
+        reject(new Error(`Discord RPC command '${cmd}' timed out`));
+      }, COMMAND_TIMEOUT_MS);
+
+      this.#pending.set(nonce, { resolve, reject, timer });
+      socket.write(encodeFrame(OPCODE.FRAME, { cmd, args, nonce }));
+    });
+  }
+
+  /** Runs the one-time (or once-per-token-expiry) authorization sequence — see the class doc comment for the full flow. */
+  async #authorizeSession(): Promise<void> {
+    if (!this.#socket) throw new Error('no socket');
+    this.#wireLongLivedSocket(this.#socket);
+
+    const stored = await discordTokenStorage.get();
+    const tokens = stored && stored.expiresAt - Date.now() > REFRESH_MARGIN_MS
+      ? stored
+      : stored
+        ? await this.#refreshTokens(stored.refreshToken)
+        : await this.#authorizeFresh();
+
+    await this.#sendCommand('AUTHENTICATE', { access_token: tokens.accessToken });
+  }
+
+  async #authorizeFresh(): Promise<DiscordTokens> {
+    this.#setStatus('authorizing');
+    const authorizeResult = (await this.#sendCommand('AUTHORIZE', {
+      client_id: CLIENT_ID,
+      scopes: ['rpc', 'rpc.voice.read', 'rpc.voice.write'],
+    })) as { code: string };
+
+    return this.#exchangeCode(authorizeResult.code);
+  }
+
+  async #exchangeCode(code: string): Promise<DiscordTokens> {
+    const response = await fetch('https://discord.com/api/oauth2/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: CLIENT_ID,
+        client_secret: DISCORD_CLIENT_SECRET,
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: REDIRECT_URI,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Discord token exchange failed (HTTP ${response.status})`);
+    }
+
+    return this.#storeTokenResponse(await response.json());
+  }
+
+  async #refreshTokens(refreshToken: string): Promise<DiscordTokens> {
+    const response = await fetch('https://discord.com/api/oauth2/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: CLIENT_ID,
+        client_secret: DISCORD_CLIENT_SECRET,
+        grant_type: 'refresh_token',
+        refresh_token: refreshToken,
+      }),
+    });
+
+    if (!response.ok) {
+      // A rejected refresh token means Kiyro's authorization was revoked (or
+      // the app removed from Discord's connected-apps list) — the only way
+      // forward is a fresh consent prompt, not another refresh attempt.
+      await discordTokenStorage.clear();
+      return this.#authorizeFresh();
+    }
+
+    return this.#storeTokenResponse(await response.json());
+  }
+
+  async #storeTokenResponse(body: unknown): Promise<DiscordTokens> {
+    const parsed = body as { access_token: string; refresh_token: string; expires_in: number };
+    const tokens: DiscordTokens = {
+      accessToken: parsed.access_token,
+      refreshToken: parsed.refresh_token,
+      expiresAt: Date.now() + parsed.expires_in * 1000,
+    };
+    await discordTokenStorage.set(tokens);
+    return tokens;
+  }
+
+  #teardown(): void {
+    this.#socket?.removeAllListeners();
+    this.#socket?.destroy();
+    this.#socket = null;
+    for (const pending of this.#pending.values()) {
+      clearTimeout(pending.timer);
+      pending.reject(new Error('Discord RPC disconnected'));
+    }
+    this.#pending.clear();
+  }
+
+  // -- Voice actions ---------------------------------------------------
+
+  async #getVoiceSettings(): Promise<VoiceSettings> {
+    return (await this.#sendCommand('GET_VOICE_SETTINGS', {})) as VoiceSettings;
+  }
+
+  async #setVoiceSettings(patch: Partial<VoiceSettings>): Promise<VoiceSettings> {
+    return (await this.#sendCommand('SET_VOICE_SETTINGS', patch)) as VoiceSettings;
+  }
+
+  /** Discord's API takes an explicit boolean, not a toggle — reading current state first is what makes this a toggle at all. */
+  async toggleMute(): Promise<void> {
+    await this.connect();
+    if (this.#status !== 'connected') throw new Error(`Discord not connected (${this.#status})`);
+    const current = await this.#getVoiceSettings();
+    await this.#setVoiceSettings({ mute: !current.mute });
+  }
+
+  async toggleDeafen(): Promise<void> {
+    await this.connect();
+    if (this.#status !== 'connected') throw new Error(`Discord not connected (${this.#status})`);
+    const current = await this.#getVoiceSettings();
+    await this.#setVoiceSettings({ deaf: !current.deaf });
+  }
+
+  /** `direction` is `1` for up, `-1` for down. Clamped to Discord's normal (non-boosted) 0–100 range. */
+  async adjustMicVolume(direction: 1 | -1): Promise<void> {
+    await this.connect();
+    if (this.#status !== 'connected') throw new Error(`Discord not connected (${this.#status})`);
+    const current = await this.#getVoiceSettings();
+    const next = Math.min(100, Math.max(0, current.input.volume + direction * MIC_VOLUME_STEP));
+    await this.#setVoiceSettings({ input: { volume: next } });
+  }
+}
+
+export const discordRpcClient = new DiscordRpcClient();

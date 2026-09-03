@@ -23,6 +23,7 @@ import { IpcChannel } from '../src/lib/electron/ipc-types';
 import type { Action } from '../src/lib/actions/types';
 import type { ExecutionOutcome } from '../src/lib/execution/executor';
 import { ActiveProfileStore, resolveControlEvent } from './resolve-control';
+import { discordRpcClient } from './discord-rpc';
 import { nativeActionExecutor } from './native-execution';
 import { electronProfileStorage } from './profile-storage';
 import { SerialBridge } from './serial-bridge';
@@ -90,10 +91,11 @@ export class ExecutionPipeline {
   }
 
   /**
-   * `profile` actions are Kiyro reconfiguring itself, not an OS-level
-   * keystroke — they need the profile list and change this process's own
-   * state, neither of which the stateless `nativeActionExecutor` has. So they
-   * are intercepted here and everything else passes straight through.
+   * `profile` and `discord` actions are both intercepted here rather than
+   * passed to the stateless `nativeActionExecutor`: `profile` changes this
+   * process's own state, and `discord` talks over its own IPC connection to
+   * Discord — neither is an OS-level keystroke. Everything else passes
+   * straight through unchanged.
    */
   #execute(controlId: string, action: Action, at: number): ExecutionOutcome {
     if (action.type === 'profile') {
@@ -104,7 +106,39 @@ export class ExecutionPipeline {
       return { status: 'executed', by: 'kiyro-pipeline' };
     }
 
+    if (action.type === 'discord') {
+      // Also fire-and-forget: connecting (and, the very first time, the
+      // Discord consent prompt) is async, and a bound key must return
+      // immediately the same as every other binding does.
+      void this.#runDiscordCommand(action.command);
+      return { status: 'executed', by: 'kiyro-pipeline' };
+    }
+
     return nativeActionExecutor.execute({ controlId, action, at });
+  }
+
+  async #runDiscordCommand(command: Extract<Action, { type: 'discord' }>['command']): Promise<void> {
+    try {
+      switch (command) {
+        case 'toggleMute':
+          await discordRpcClient.toggleMute();
+          break;
+        case 'toggleDeafen':
+          await discordRpcClient.toggleDeafen();
+          break;
+        case 'micVolumeUp':
+          await discordRpcClient.adjustMicVolume(1);
+          break;
+        case 'micVolumeDown':
+          await discordRpcClient.adjustMicVolume(-1);
+          break;
+      }
+    } catch (error) {
+      // Never surfaced beyond the log — most likely cause is simply "Discord
+      // isn't running right now," which is a normal, expected state (not
+      // every key press happens while voice-chatting), not a Kiyro error.
+      console.error(`[kiyro] discord ${command} failed:`, error);
+    }
   }
 
   /**

@@ -1,4 +1,5 @@
 import {
+  DISCORD_LABELS,
   MEDIA_LABELS,
   PROFILE_LABELS,
   SCROLL_LABELS,
@@ -113,6 +114,13 @@ export function describeAction(action: Action): ActionLabel {
         primary: PROFILE_LABELS[action.command],
         secondary: 'Profile',
         full: `Profile · ${PROFILE_LABELS[action.command]}`,
+      };
+
+    case 'discord':
+      return {
+        primary: DISCORD_LABELS[action.command],
+        secondary: 'Discord',
+        full: `Discord · ${DISCORD_LABELS[action.command]}`,
       };
 
     default:

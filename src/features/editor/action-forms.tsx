@@ -24,6 +24,7 @@ import {
 import { APP_LAUNCH_PRESETS } from '@/lib/actions/app-launch-presets';
 import {
   DESTRUCTIVE_SYSTEM_COMMANDS,
+  DISCORD_LABELS,
   MEDIA_LABELS,
   PROFILE_LABELS,
   SCROLL_LABELS,
@@ -33,6 +34,7 @@ import {
 import { MODIFIERS, modifierLabel } from '@/lib/actions/keys';
 import type { Modifier } from '@/lib/actions/keys';
 import {
+  DISCORD_COMMANDS,
   MEDIA_COMMANDS,
   MOUSE_BUTTONS,
   PROFILE_COMMANDS,
@@ -216,6 +218,28 @@ export function ActionForm({ action, onChange }: FormProps) {
         </Stack>
       );
 
+    case 'discord':
+      return (
+        <Stack spacing={3}>
+          <TextField
+            select
+            value={action.command}
+            onChange={(event) =>
+              onChange({
+                type: 'discord',
+                command: event.target.value as (typeof DISCORD_COMMANDS)[number],
+              })
+            }
+          >
+            {DISCORD_COMMANDS.map((command) => (
+              <MenuItem key={command} value={command}>
+                {DISCORD_LABELS[command]}
+              </MenuItem>
+            ))}
+          </TextField>
+        </Stack>
+      );
+
     case 'application':
       return <ApplicationForm action={action} onChange={onChange} />;
 
@@ -234,8 +258,7 @@ const SYSTEM_NOTES: Partial<Record<SystemCommand, string>> = {
     'Asks Windows to sleep directly. Whether it actually does still depends on the machine’s power plan and drivers.',
   screenshot:
     'Opens the Snipping Tool overlay (Win + Shift + S) so you choose the area — the right choice with more than one monitor.',
-  screenshotFull:
-    'Captures every display at once into one image, saved to Pictures\\Screenshots.',
+  screenshotFull: 'Captures every display at once into one image, saved to Pictures\\Screenshots.',
   displayOff: 'Displays come back on at the next key press or mouse move.',
 };
 

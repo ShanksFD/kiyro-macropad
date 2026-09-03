@@ -1,6 +1,7 @@
 import type {
   Action,
   ActionType,
+  DiscordCommand,
   MediaCommand,
   ProfileCommand,
   ScrollDirection,
@@ -10,7 +11,15 @@ import type {
 
 /** Picker grouping. `none` is handled by the "Clear" affordance, not a tab. */
 export type ActionCategoryId =
-  'keyboard' | 'hotkey' | 'text' | 'media' | 'mouse' | 'system' | 'application' | 'profile';
+  | 'keyboard'
+  | 'hotkey'
+  | 'text'
+  | 'media'
+  | 'mouse'
+  | 'system'
+  | 'application'
+  | 'profile'
+  | 'discord';
 
 export type ActionAvailability =
   /** Fully modelled, editable, and understood by the current execution mode. */
@@ -64,6 +73,13 @@ export const ACTION_CATEGORIES: readonly ActionCategory[] = [
     types: ['profile'],
   },
   {
+    id: 'discord',
+    label: 'Discord',
+    description: 'Mute, deafen, and mic volume — talks to Discord directly, not a keystroke.',
+    availability: 'available',
+    types: ['discord'],
+  },
+  {
     id: 'keyboard',
     label: 'Keyboard',
     description: 'Send a single key.',
@@ -108,6 +124,7 @@ export const ACTION_AVAILABILITY: Record<ActionType, ActionAvailability> = {
   system: 'available',
   application: 'available',
   profile: 'available',
+  discord: 'available',
 };
 
 export function isPlannedAction(action: Action): boolean {
@@ -134,6 +151,8 @@ export function categoryOfAction(action: Action): ActionCategoryId | null {
       return 'application';
     case 'profile':
       return 'profile';
+    case 'discord':
+      return 'discord';
     default:
       return null;
   }
@@ -189,6 +208,13 @@ export const PROFILE_LABELS: Record<ProfileCommand, string> = {
   previous: 'Previous Profile',
 };
 
+export const DISCORD_LABELS: Record<DiscordCommand, string> = {
+  toggleMute: 'Toggle Mute',
+  toggleDeafen: 'Toggle Deafen',
+  micVolumeUp: 'Mic Volume Up',
+  micVolumeDown: 'Mic Volume Down',
+};
+
 /** Sensible starting point when a user switches an action to a new type. */
 export function defaultActionOfType(type: ActionType): Action {
   switch (type) {
@@ -212,6 +238,8 @@ export function defaultActionOfType(type: ActionType): Action {
       return { type: 'application', label: '', target: '', kind: 'path' };
     case 'profile':
       return { type: 'profile', command: 'next' };
+    case 'discord':
+      return { type: 'discord', command: 'toggleMute' };
     default:
       return { type: 'none' };
   }

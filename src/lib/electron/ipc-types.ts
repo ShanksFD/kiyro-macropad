@@ -48,6 +48,8 @@ export const IpcChannel = {
   UpdaterDownload: 'kiyro:updater:download',
   UpdaterQuitAndInstall: 'kiyro:updater:quit-and-install',
   UpdaterStatus: 'kiyro:updater:status',
+  DiscordConnect: 'kiyro:discord:connect',
+  DiscordStatus: 'kiyro:discord:status',
 } as const;
 
 /** One browser found in the registry — see `electron/win-browsers.ts`. */
@@ -86,6 +88,22 @@ export type UpdaterStatusPayload =
   | { state: 'downloading'; percent: number }
   | { state: 'downloaded'; version: string }
   | { state: 'error'; message: string };
+
+/**
+ * Where Kiyro's connection to Discord's local app stands, pushed from
+ * `electron/discord-rpc.ts` whenever it changes and also returned directly
+ * by `connect()` so a caller (Settings' "Connect" button) can show immediate
+ * feedback. `'unconfigured'` means this build has no
+ * `KIYRO_DISCORD_CLIENT_SECRET` baked in; `'unavailable'` means Discord
+ * itself isn't running right now.
+ */
+export type DiscordStatusPayload =
+  | 'disconnected'
+  | 'connecting'
+  | 'authorizing'
+  | 'connected'
+  | 'unavailable'
+  | 'unconfigured';
 
 /** Pushed from main whenever the real serial connection's state changes. */
 export interface DeviceStatusPayload {
@@ -200,6 +218,17 @@ export interface KiyroBridge {
     /** Quits Kiyro, installs, relaunches. Only meaningful once `onStatus` has reported `'downloaded'`. */
     quitAndInstall(): Promise<void>;
     onStatus(callback: (payload: UpdaterStatusPayload) => void): () => void;
+  };
+  /**
+   * Discord voice control (`electron/discord-rpc.ts`) — mute/deafen/mic
+   * volume, over Discord's own local connection. `connect()` is only needed
+   * to let the UI show live status / trigger the one-time approval prompt
+   * proactively; a bound `discord` action connects lazily on its own the
+   * first time it's actually pressed either way.
+   */
+  discord: {
+    connect(): Promise<DiscordStatusPayload>;
+    onStatus(callback: (payload: DiscordStatusPayload) => void): () => void;
   };
   /** So the renderer can lay out its own title bar around the OS's caption buttons/traffic lights, which sit on opposite sides. */
   platform: 'win32' | 'darwin' | 'linux';

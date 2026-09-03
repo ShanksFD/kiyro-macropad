@@ -3,6 +3,7 @@
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
+import Chip from '@mui/material/Chip';
 import Divider from '@mui/material/Divider';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import MenuItem from '@mui/material/MenuItem';
@@ -11,10 +12,22 @@ import Stack from '@mui/material/Stack';
 import Switch from '@mui/material/Switch';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
-import { ScienceIcon } from '@/components/icons';
+import { BrandDiscordIcon, ScienceIcon } from '@/components/icons';
+import { useKiyroBridge } from '@/hooks/use-kiyro-bridge';
 import { useDeviceStore } from '@/stores/device-store';
+import { useDiscordStore } from '@/stores/discord-store';
+import type { DiscordStatusPayload } from '@/lib/electron/ipc-types';
 import { useUiStore } from '@/stores/ui-store';
 import type { Preferences } from '@/stores/ui-store';
+
+const DISCORD_STATUS_LABEL: Record<DiscordStatusPayload, string> = {
+  disconnected: 'Not connected',
+  connecting: 'Connecting…',
+  authorizing: 'Check Discord for an approval prompt…',
+  connected: 'Connected',
+  unavailable: 'Discord isn’t running',
+  unconfigured: 'Not available in this build',
+};
 
 function Section({
   title,
@@ -52,6 +65,20 @@ export function SettingsView() {
   const notify = useUiStore((state) => state.notify);
   const connect = useDeviceStore((state) => state.connect);
   const status = useDeviceStore((state) => state.status);
+
+  const kiyro = useKiyroBridge();
+  const discordStatus = useDiscordStore((state) => state.status);
+  const setDiscordStatus = useDiscordStore((state) => state.setStatus);
+  const discordBusy = discordStatus === 'connecting' || discordStatus === 'authorizing';
+
+  const connectDiscord = async () => {
+    if (!kiyro) return;
+    const result = await kiyro.discord.connect();
+    setDiscordStatus(result);
+    if (result === 'connected') notify('Connected to Discord.', 'success');
+    else if (result === 'unavailable') notify('Discord isn’t running.', 'warning');
+    else if (result === 'unconfigured') notify('This build has no Discord integration configured.', 'warning');
+  };
 
   const toggle = (key: keyof Preferences, label: string, help?: string) => (
     <FormControlLabel
@@ -107,6 +134,29 @@ export function SettingsView() {
               'Reconnect automatically',
               'Reopens a port you have already authorised when the app loads.',
             )}
+          </Section>
+
+          <Section
+            title="Discord"
+            description="Lets Discord actions (mute, deafen, mic volume) talk to Discord directly."
+          >
+            <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
+              <Chip
+                icon={<BrandDiscordIcon sx={{ fontSize: 14 }} />}
+                label={DISCORD_STATUS_LABEL[discordStatus]}
+                color={discordStatus === 'connected' ? 'primary' : 'default'}
+                variant={discordStatus === 'connected' ? 'filled' : 'outlined'}
+              />
+              <Button variant="outlined" disabled={discordBusy} onClick={() => void connectDiscord()}>
+                {discordStatus === 'connected' ? 'Reconnect' : 'Connect to Discord'}
+              </Button>
+            </Stack>
+            <Alert severity="info" variant="outlined">
+              A Discord action connects on its own the first time it’s pressed, even without doing
+              this here — this button is only for testing the connection ahead of time. The first
+              approval shows a one-time prompt inside Discord itself; nothing to do in a browser.
+              Requires Discord to be running.
+            </Alert>
           </Section>
 
           <Section title="Configuration" description="Editing and saving behaviour.">

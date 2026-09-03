@@ -215,7 +215,7 @@ not conflate them:**
 | | Scope needed | Lives where |
 |---|---|---|
 | **Publish token** (`GH_TOKEN`) | Write access to this repo (create the release, upload assets) | Only in your own shell, only when cutting a release. Never committed, never shipped. |
-| **Runtime token** (`KIYRO_UPDATE_TOKEN`) | **Read-only**, scoped to only this repo (`Contents: Read-only`, fine-grained PAT) | Baked into every build by `scripts/generate-update-token.js` at build time (writes the gitignored `electron/update-token.ts`). Ships inside the app — extractable by anyone who receives it. |
+| **Runtime token** (`KIYRO_UPDATE_TOKEN`) | **Read-only**, scoped to only this repo (`Contents: Read-only`, fine-grained PAT) | Baked into every build by `scripts/generate-build-secrets.mjs` at build time (writes the gitignored `electron/update-token.ts`). Ships inside the app — extractable by anyone who receives it. |
 
 The runtime token being extractable is an accepted tradeoff of "private repo,
 no update server," not a bug: GitHub has no token scope narrower than
@@ -228,8 +228,9 @@ effectively what it is.
 To cut a release:
 
 ```bash
-GH_TOKEN=<write-scoped token>            # your shell only, this session
-KIYRO_UPDATE_TOKEN=<read-only token>     # gets baked into the build
+GH_TOKEN=<write-scoped token>              # your shell only, this session
+KIYRO_UPDATE_TOKEN=<read-only token>       # gets baked into the build
+KIYRO_DISCORD_CLIENT_SECRET=<see below>    # only if shipping the Discord integration too
 npm run dist:win:publish
 ```
 
@@ -238,6 +239,63 @@ always`, which uploads the installer and its update metadata to a GitHub
 Release tagged with `package.json`'s `version` — bump that first. Existing
 installs pick it up on their next background check (or immediately, via Help
 → Check for Updates…).
+
+**For local dev/testing, `.env.local` is more convenient than pasting these
+every session** (see `.env.local.example`): copy it to `.env.local` (already
+gitignored), fill in the real values, then once per PowerShell terminal
+window:
+
+```powershell
+. .\scripts\load-env.ps1
+```
+
+That loads them as real `$env:` variables for the rest of that terminal
+session — every `npm run ...` after it (`electron:dev`, `build:electron`,
+`dist:win:publish`, ...) then sees them normally. Plain `node` never
+auto-loads `.env` files the way `next dev`/`next build` do, which is why this
+needs its own step. For an actual release, pasting the tokens explicitly (as
+above) is arguably still the better habit — it means a stale or wrong secret
+can never silently sit loaded in a forgotten terminal.
+
+## Discord integration
+
+`discord` actions (mute, deafen, mic volume up/down) talk directly to
+Discord's own local app over its RPC protocol (`electron/discord-rpc.ts`) —
+not a synthesized keystroke, an actual command to whichever Discord account
+is signed in. The wire protocol itself is spoken from scratch (no
+`discord-rpc` npm package, which is unmaintained); see that file's own doc
+comment for the full handshake → authorize → token-exchange → authenticate
+flow.
+
+**One-time setup, before this feature does anything:**
+
+1. Create a Discord application at
+   [discord.com/developers/applications](https://discord.com/developers/applications).
+2. Under **OAuth2**, copy the **Client ID** (already hardcoded in
+   `discord-rpc.ts` as `CLIENT_ID` — update it there if you ever recreate the
+   app) and the **Client Secret**.
+3. Add `http://localhost` as a **Redirect URI** under OAuth2. It's never
+   actually navigated to — the authorization code comes back over the local
+   IPC pipe, not a browser redirect — but Discord still requires *a*
+   registered URI to accept the token exchange.
+4. Build with `KIYRO_DISCORD_CLIENT_SECRET` set, same pattern as the update
+   token above (baked in by `scripts/generate-build-secrets.mjs` into the
+   gitignored `electron/discord-secret.ts`).
+
+**Two things worth understanding before relying on this:**
+
+- **The client secret ships inside the app.** Same accepted tradeoff as
+  `KIYRO_UPDATE_TOKEN` above — there's no way to do the OAuth token exchange
+  without it, and no scope narrow enough to avoid shipping *something*
+  sensitive here. Rotate it if you're ever worried it's been extracted.
+- **`rpc.voice.write` (needed for mute/deafen/mic volume) is a *restricted*
+  Discord OAuth scope.** It works for your own account automatically (as the
+  app's owner), but a friend running Kiyro will hit a permission error unless
+  you add them individually as a tester: Developer Portal → your app →
+  **App Testers**. There's a cap (currently around 25) and no full
+  verification is needed for that many — but it is a manual step per person,
+  not something that scales to a public release the way the rest of Kiyro's
+  distribution does.
 
 ## Documentation
 

@@ -13,6 +13,7 @@ import { useLiveInputStore } from '@/stores/live-input-store';
 import { useActiveProfile, useProfileStore } from '@/stores/profile-store';
 import { useQuickActionsStore } from '@/stores/quick-actions-store';
 import { useUiStore } from '@/stores/ui-store';
+import { useDiscordStore } from '@/stores/discord-store';
 import { useUpdateStore } from '@/stores/update-store';
 import type { MacroProfile } from '@/lib/profiles/types';
 
@@ -166,6 +167,7 @@ export function useAppBootstrap(): void {
     let unsubscribeElectronStatus: (() => void) | undefined;
     let unsubscribeActiveProfile: (() => void) | undefined;
     let unsubscribeUpdater: (() => void) | undefined;
+    let unsubscribeDiscord: (() => void) | undefined;
 
     if (isElectron()) {
       let frameId = 0;
@@ -203,6 +205,11 @@ export function useAppBootstrap(): void {
       unsubscribeUpdater = window.kiyro?.updater.onStatus((status) => {
         useUpdateStore.getState().setStatus(status);
       });
+
+      // Mirrors `electron/discord-rpc.ts`'s connection state — see `discord-store.ts`.
+      unsubscribeDiscord = window.kiyro?.discord.onStatus((status) => {
+        useDiscordStore.getState().setStatus(status);
+      });
     }
 
     return () => {
@@ -214,6 +221,7 @@ export function useAppBootstrap(): void {
       unsubscribeElectronStatus?.();
       unsubscribeActiveProfile?.();
       unsubscribeUpdater?.();
+      unsubscribeDiscord?.();
       wired = false;
     };
   }, []);

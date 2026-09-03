@@ -16,6 +16,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 import type {
   DeviceEventPayload,
   DeviceStatusPayload,
+  DiscordStatusPayload,
   ExecutionOutcomePayload,
   InstalledBrowser,
   KiyroBridge,
@@ -56,6 +57,8 @@ const Channel = {
   UpdaterDownload: 'kiyro:updater:download',
   UpdaterQuitAndInstall: 'kiyro:updater:quit-and-install',
   UpdaterStatus: 'kiyro:updater:status',
+  DiscordConnect: 'kiyro:discord:connect',
+  DiscordStatus: 'kiyro:discord:status',
 } as const;
 
 function on<T>(channel: string, callback: (payload: T) => void): () => void {
@@ -114,6 +117,11 @@ const kiyroBridge: KiyroBridge = {
     quitAndInstall: (): Promise<void> => ipcRenderer.invoke(Channel.UpdaterQuitAndInstall),
     onStatus: (callback: (payload: UpdaterStatusPayload) => void) =>
       on(Channel.UpdaterStatus, callback),
+  },
+  discord: {
+    connect: (): Promise<DiscordStatusPayload> => ipcRenderer.invoke(Channel.DiscordConnect),
+    onStatus: (callback: (payload: DiscordStatusPayload) => void) =>
+      on(Channel.DiscordStatus, callback),
   },
   platform: process.platform as 'win32' | 'darwin' | 'linux',
 };

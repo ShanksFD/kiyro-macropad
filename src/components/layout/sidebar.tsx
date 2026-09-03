@@ -149,7 +149,7 @@ export function Sidebar() {
 
       <Stack direction="row" spacing={2} sx={{ alignItems: 'center', px: 5, py: 3 }}>
         <Typography variant="caption" color="text.secondary">
-          v0.1.3
+          v{process.env.NEXT_PUBLIC_APP_VERSION}
         </Typography>
         <UpdateChip />
       </Stack>

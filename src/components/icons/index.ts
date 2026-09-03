@@ -20,6 +20,7 @@ import {
   IconArrowRight,
   IconArrowsVertical,
   IconBan,
+  IconBrandDiscord,
   IconBrandWindows,
   IconCaretDownFilled,
   IconCheck,
@@ -73,6 +74,7 @@ import { createTablerIcon } from './create-tabler-icon';
 export const AddIcon = createTablerIcon(IconPlus);
 export const AltIcon = createTablerIcon(IconAlt);
 export const AppsIcon = createTablerIcon(IconApps);
+export const BrandDiscordIcon = createTablerIcon(IconBrandDiscord);
 export const BrandWindowsIcon = createTablerIcon(IconBrandWindows);
 export const ArrowDropDownIcon = createTablerIcon(IconCaretDownFilled);
 export const ArrowForwardIcon = createTablerIcon(IconArrowRight);

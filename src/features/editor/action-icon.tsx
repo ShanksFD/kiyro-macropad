@@ -11,6 +11,7 @@ import {
   MouseIcon,
   PowerSettingsNewIcon,
   AppsIcon,
+  BrandDiscordIcon,
   LayersIcon,
   RemoveIcon,
 } from '@/components/icons';
@@ -28,6 +29,7 @@ const ICONS: Record<ActionType, React.ComponentType<MuiTablerIconProps>> = {
   system: PowerSettingsNewIcon,
   application: AppsIcon,
   profile: LayersIcon,
+  discord: BrandDiscordIcon,
 };
 
 /** One icon per action type, used everywhere an action is listed. */

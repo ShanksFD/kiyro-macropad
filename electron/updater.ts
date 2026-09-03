@@ -19,7 +19,7 @@
  *   create the release and upload its assets. It never leaves that machine
  *   and is never baked into the app.
  * - **The runtime token** (`KIYRO_UPDATE_TOKEN`, baked in below via
- *   `scripts/generate-update-token.mjs` at build time) needs only *read*
+ *   `scripts/generate-build-secrets.mjs` at build time) needs only *read*
  *   access, and ships inside every build handed out to anyone. Anyone who
  *   receives the app can extract this token — it's a plain string in the
  *   packaged JS — and use it to read the private repo, same as a real

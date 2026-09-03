@@ -129,6 +129,30 @@ export const ACTION_PRESETS: readonly ActionPreset[] = [
     { type: 'profile', command: 'previous' },
     'switch cycle layer preset back',
   ),
+  preset(
+    'discord-toggle-mute',
+    'Toggle Mute',
+    { type: 'discord', command: 'toggleMute' },
+    'discord mic microphone unmute',
+  ),
+  preset(
+    'discord-toggle-deafen',
+    'Toggle Deafen',
+    { type: 'discord', command: 'toggleDeafen' },
+    'discord undeafen headphones',
+  ),
+  preset(
+    'discord-mic-volume-up',
+    'Mic Volume Up',
+    { type: 'discord', command: 'micVolumeUp' },
+    'discord microphone gain sensitivity louder',
+  ),
+  preset(
+    'discord-mic-volume-down',
+    'Mic Volume Down',
+    { type: 'discord', command: 'micVolumeDown' },
+    'discord microphone gain sensitivity quieter',
+  ),
   // Same built-in apps as the "Application" tab's own quick-picks
   // (`app-launch-presets.ts`) — kept in one place, spread in here so they're
   // reachable from the top search box too, like every other preset.
