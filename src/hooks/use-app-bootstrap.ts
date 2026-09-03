@@ -13,6 +13,7 @@ import { useLiveInputStore } from '@/stores/live-input-store';
 import { useActiveProfile, useProfileStore } from '@/stores/profile-store';
 import { useQuickActionsStore } from '@/stores/quick-actions-store';
 import { useUiStore } from '@/stores/ui-store';
+import { useUpdateStore } from '@/stores/update-store';
 import type { MacroProfile } from '@/lib/profiles/types';
 
 let wired = false;
@@ -164,6 +165,7 @@ export function useAppBootstrap(): void {
     let unsubscribeElectronOutcomes: (() => void) | undefined;
     let unsubscribeElectronStatus: (() => void) | undefined;
     let unsubscribeActiveProfile: (() => void) | undefined;
+    let unsubscribeUpdater: (() => void) | undefined;
 
     if (isElectron()) {
       let frameId = 0;
@@ -195,6 +197,12 @@ export function useAppBootstrap(): void {
         if (useProfileStore.getState().activeProfileId === profileId) return;
         useProfileStore.getState().setActive(profileId);
       });
+
+      // Mirrors `electron/updater.ts`'s state — main does the actual
+      // checking/downloading, this only reflects it (see `update-store.ts`).
+      unsubscribeUpdater = window.kiyro?.updater.onStatus((status) => {
+        useUpdateStore.getState().setStatus(status);
+      });
     }
 
     return () => {
@@ -205,6 +213,7 @@ export function useAppBootstrap(): void {
       unsubscribeElectronOutcomes?.();
       unsubscribeElectronStatus?.();
       unsubscribeActiveProfile?.();
+      unsubscribeUpdater?.();
       wired = false;
     };
   }, []);

@@ -44,6 +44,10 @@ export const IpcChannel = {
   ShortcutCaptureStop: 'kiyro:shortcut:capture-stop',
   ShortcutCaptureUpdate: 'kiyro:shortcut:capture-update',
   ActiveProfileChanged: 'kiyro:profiles:active-changed',
+  UpdaterCheck: 'kiyro:updater:check',
+  UpdaterDownload: 'kiyro:updater:download',
+  UpdaterQuitAndInstall: 'kiyro:updater:quit-and-install',
+  UpdaterStatus: 'kiyro:updater:status',
 } as const;
 
 /** One browser found in the registry — see `electron/win-browsers.ts`. */
@@ -66,6 +70,22 @@ export type ShortcutCaptureUpdate =
   | { kind: 'modifiers'; modifiers: string[] }
   | { kind: 'captured'; modifiers: string[]; key: string }
   | { kind: 'cancelled'; reason: 'escape' | 'timeout' };
+
+/**
+ * Where a check/download stands, pushed from `electron/updater.ts` whenever
+ * it changes and also returned directly by `check()` so a caller doesn't
+ * have to race the broadcast to show its own feedback. Never implies a
+ * download or install happened on its own — `available`/`downloaded` are
+ * things the user has to act on (`download()`/`quitAndInstall()`).
+ */
+export type UpdaterStatusPayload =
+  | { state: 'idle' }
+  | { state: 'checking' }
+  | { state: 'available'; version: string }
+  | { state: 'not-available' }
+  | { state: 'downloading'; percent: number }
+  | { state: 'downloaded'; version: string }
+  | { state: 'error'; message: string };
 
 /** Pushed from main whenever the real serial connection's state changes. */
 export interface DeviceStatusPayload {
@@ -168,6 +188,19 @@ export interface KiyroBridge {
   };
   /** Fired when the main process switches profiles on its own — see the `profile` action. */
   onActiveProfileChanged(callback: (payload: { profileId: string }) => void): () => void;
+  /**
+   * Manual update flow (`electron/updater.ts`) — checking is passive and
+   * runs in the background on its own, but `download`/`quitAndInstall` are
+   * only ever called in response to the user clicking something.
+   */
+  updater: {
+    /** Resolves with the resulting status directly, so a caller (e.g. the Help menu's "Check for Updates…") can show immediate feedback without waiting on `onStatus`. */
+    check(): Promise<UpdaterStatusPayload>;
+    download(): Promise<void>;
+    /** Quits Kiyro, installs, relaunches. Only meaningful once `onStatus` has reported `'downloaded'`. */
+    quitAndInstall(): Promise<void>;
+    onStatus(callback: (payload: UpdaterStatusPayload) => void): () => void;
+  };
   /** So the renderer can lay out its own title bar around the OS's caption buttons/traffic lights, which sit on opposite sides. */
   platform: 'win32' | 'darwin' | 'linux';
 }

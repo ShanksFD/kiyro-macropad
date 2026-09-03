@@ -22,6 +22,7 @@ import { layout } from '@/theme/tokens';
 import { useUiStore } from '@/stores/ui-store';
 import { useEditorStore } from '@/stores/editor-store';
 import { BrandLockup } from './brand-mark';
+import { UpdateChip } from './update-chip';
 
 interface NavItem {
   href: Route;
@@ -148,8 +149,9 @@ export function Sidebar() {
 
       <Stack direction="row" spacing={2} sx={{ alignItems: 'center', px: 5, py: 3 }}>
         <Typography variant="caption" color="text.secondary">
-          v0.1.0
+          v0.1.2
         </Typography>
+        <UpdateChip />
       </Stack>
     </Box>
   );

@@ -6,6 +6,8 @@ import Divider from '@mui/material/Divider';
 import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
 import { useKiyroBridge } from '@/hooks/use-kiyro-bridge';
+import { useUiStore } from '@/stores/ui-store';
+import { useUpdateStore } from '@/stores/update-store';
 import { radius } from '@/theme/tokens';
 
 /**
@@ -17,6 +19,8 @@ import { radius } from '@/theme/tokens';
  */
 export function WindowMenu() {
   const kiyro = useKiyroBridge();
+  const notify = useUiStore((state) => state.notify);
+  const setUpdateStatus = useUpdateStore((state) => state.setStatus);
   const [openMenu, setOpenMenu] = useState<'view' | 'help' | null>(null);
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
 
@@ -39,6 +43,34 @@ export function WindowMenu() {
       close();
       void action();
     };
+  }
+
+  /**
+   * An explicit ask, unlike the background checking `electron/updater.ts`
+   * already does on its own — so this gets its own feedback (a toast) even
+   * when the answer is "nothing to do", which the passive background check
+   * deliberately never announces on its own.
+   */
+  async function checkForUpdates(): Promise<void> {
+    const status = await kiyro!.updater.check();
+    setUpdateStatus(status);
+
+    switch (status.state) {
+      case 'available':
+        notify(`Update ${status.version} is available.`, 'info');
+        break;
+      case 'not-available':
+        notify('Kiyro is up to date.', 'success');
+        break;
+      case 'downloaded':
+        notify(`Update ${status.version} is downloaded — restart Kiyro to install it.`, 'info');
+        break;
+      case 'error':
+        notify(`Could not check for updates: ${status.message}`, 'error');
+        break;
+      default:
+        break;
+    }
   }
 
   const buttonSx = {
@@ -73,6 +105,8 @@ export function WindowMenu() {
       </Menu>
 
       <Menu anchorEl={anchorEl} open={openMenu === 'help'} onClose={close}>
+        <MenuItem onClick={run(checkForUpdates)}>Check for Updates…</MenuItem>
+        <Divider />
         <MenuItem onClick={run(kiyro.window.showAbout)}>About Kiyro</MenuItem>
       </Menu>
     </>

@@ -169,7 +169,7 @@ export function KeyCap({ button, action, selected, showEventCode, onSelect }: Pr
                 display: '-webkit-box',
                 WebkitLineClamp: 2,
                 WebkitBoxOrient: 'vertical',
-                opacity: assigned ? 1 : 0.4,
+                opacity: assigned ? 1 : 0.6,
               }}
             >
               {assigned ? label.primary : 'Unassigned'}

@@ -21,6 +21,7 @@ import type {
   KiyroBridge,
   SetActiveProfilePayload,
   ShortcutCaptureUpdate,
+  UpdaterStatusPayload,
 } from '../src/lib/electron/ipc-types';
 import type { MacroProfile } from '../src/lib/profiles/types';
 import type { Preferences } from '../src/lib/preferences/schema';
@@ -51,6 +52,10 @@ const Channel = {
   ShortcutCaptureStop: 'kiyro:shortcut:capture-stop',
   ShortcutCaptureUpdate: 'kiyro:shortcut:capture-update',
   ActiveProfileChanged: 'kiyro:profiles:active-changed',
+  UpdaterCheck: 'kiyro:updater:check',
+  UpdaterDownload: 'kiyro:updater:download',
+  UpdaterQuitAndInstall: 'kiyro:updater:quit-and-install',
+  UpdaterStatus: 'kiyro:updater:status',
 } as const;
 
 function on<T>(channel: string, callback: (payload: T) => void): () => void {
@@ -103,6 +108,13 @@ const kiyroBridge: KiyroBridge = {
   },
   onActiveProfileChanged: (callback: (payload: { profileId: string }) => void) =>
     on(Channel.ActiveProfileChanged, callback),
+  updater: {
+    check: (): Promise<UpdaterStatusPayload> => ipcRenderer.invoke(Channel.UpdaterCheck),
+    download: (): Promise<void> => ipcRenderer.invoke(Channel.UpdaterDownload),
+    quitAndInstall: (): Promise<void> => ipcRenderer.invoke(Channel.UpdaterQuitAndInstall),
+    onStatus: (callback: (payload: UpdaterStatusPayload) => void) =>
+      on(Channel.UpdaterStatus, callback),
+  },
   platform: process.platform as 'win32' | 'darwin' | 'linux',
 };
 

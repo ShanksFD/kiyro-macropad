@@ -44,6 +44,7 @@ import { buildMacAppMenu, showAboutDialog } from './menu';
 import { createTray, setTrayConnected } from './tray';
 import { ExecutionPipeline } from './execution-pipeline';
 import { registerIpcHandlers } from './ipc-handlers';
+import { AppUpdater } from './updater';
 import { listInstalledBrowsers } from './win-browsers';
 import * as keyboardCapture from './win-keyboard-hook';
 import { IpcChannel } from '../src/lib/electron/ipc-types';
@@ -343,6 +344,12 @@ if (!gotSingleInstanceLock) {
     const pipeline = new ExecutionPipeline(() => mainWindow);
     registerIpcHandlers(pipeline);
     void createWindow();
+
+    const updater = new AppUpdater(() => mainWindow);
+    updater.init();
+    ipcMain.handle(IpcChannel.UpdaterCheck, () => updater.check());
+    ipcMain.handle(IpcChannel.UpdaterDownload, () => updater.download());
+    ipcMain.handle(IpcChannel.UpdaterQuitAndInstall, () => updater.quitAndInstall());
 
     tray = createTray({
       onOpen: () => {

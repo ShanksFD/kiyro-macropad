@@ -30,8 +30,9 @@ npm test                # vitest, no hardware required
 npm run format          # prettier
 ```
 
-Packaging (`electron-builder`/`electron-forge` config to produce an installer)
-is not set up yet — `npm run electron:dev` runs the app from source.
+Packaging is `electron-builder`, configured in `package.json`'s `build` block
+— `npm run dist:win` produces a Windows installer under `dist-installer/`. See
+"Releasing and auto-updates" below for how installs then stay current.
 
 ## First run without hardware
 
@@ -196,6 +197,47 @@ running `npm run electron:dev` and pressing a physically bound key.
 `electron/native-execution.ts` was ported from — keeps its own `unittest`
 suite; see [`../host/README.md`](../host/README.md#running-the-tests). It is
 no longer part of the running app.
+
+## Releasing and auto-updates
+
+Installs check Kiyro's own GitHub Releases and can update in place — nobody
+needs to be sent a new installer and reinstall by hand. Checking runs
+automatically in the background; **downloading and installing an update are
+both things the user does explicitly** (a chip in the sidebar once one's
+found, or Help → Check for Updates… to ask on demand) — see
+`electron/updater.ts` for the full reasoning.
+
+This repo is private, and a private repo's release assets need
+authentication to download at all — which means shipping a read-only GitHub
+token inside every copy of the app. **Two separate tokens are involved; do
+not conflate them:**
+
+| | Scope needed | Lives where |
+|---|---|---|
+| **Publish token** (`GH_TOKEN`) | Write access to this repo (create the release, upload assets) | Only in your own shell, only when cutting a release. Never committed, never shipped. |
+| **Runtime token** (`KIYRO_UPDATE_TOKEN`) | **Read-only**, scoped to only this repo (`Contents: Read-only`, fine-grained PAT) | Baked into every build by `scripts/generate-update-token.js` at build time (writes the gitignored `electron/update-token.ts`). Ships inside the app — extractable by anyone who receives it. |
+
+The runtime token being extractable is an accepted tradeoff of "private repo,
+no update server," not a bug: GitHub has no token scope narrower than
+repo-content-read that still covers release assets, so there is no way to
+authorize "downloads only." Give it an expiry and rotate it (issue a new one,
+cut a new release built with it) before it expires — treat this the same way
+you'd treat handing trusted friends read access to the repo, because that's
+effectively what it is.
+
+To cut a release:
+
+```bash
+GH_TOKEN=<write-scoped token>            # your shell only, this session
+KIYRO_UPDATE_TOKEN=<read-only token>     # gets baked into the build
+npm run dist:win:publish
+```
+
+`dist:win:publish` builds, then runs `electron-builder --win --publish
+always`, which uploads the installer and its update metadata to a GitHub
+Release tagged with `package.json`'s `version` — bump that first. Existing
+installs pick it up on their next background check (or immediately, via Help
+→ Check for Updates…).
 
 ## Documentation
 

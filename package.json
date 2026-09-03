@@ -1,6 +1,6 @@
 {
   "name": "kiyro",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "private": true,
   "description": "Kiyro — macro pad configurator",
   "license": "MIT",
@@ -23,10 +23,11 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "format": "prettier --write .",
-    "build:electron": "tsc -p electron/tsconfig.json",
+    "build:electron": "node scripts/generate-update-token.mjs && tsc -p electron/tsconfig.json",
     "electron:dev": "concurrently -k \"next dev\" \"wait-on http://localhost:3000 && npm run build:electron && electron .\"",
     "dist:win": "npm run build && npm run build:electron && electron-builder --win",
-    "dist:mac": "npm run build && npm run build:electron && electron-builder --mac"
+    "dist:mac": "npm run build && npm run build:electron && electron-builder --mac",
+    "dist:win:publish": "npm run build && npm run build:electron && node scripts/tag-release.mjs && electron-builder --win --publish always"
   },
   "dependencies": {
     "@emotion/cache": "^11.14.0",
@@ -36,6 +37,7 @@
     "@mui/material": "^9.4.0",
     "@mui/material-nextjs": "^9.4.0",
     "@tabler/icons-react": "^3.46.0",
+    "electron-updater": "^6.8.9",
     "koffi": "^2.9.0",
     "next": "^16.3.3",
     "react": "^19.2.8",
@@ -66,6 +68,13 @@
     "productName": "Kiyro",
     "directories": {
       "output": "dist-installer"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "ShanksFD",
+      "repo": "kiyro-macropad",
+      "private": true,
+      "releaseType": "draft"
     },
     "files": [
       "dist-electron/**/*",
