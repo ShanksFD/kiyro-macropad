@@ -20,7 +20,7 @@ interface Props {
 
 /** Reusable "press the shortcut" capture surface. */
 export function ShortcutRecorder({ modifiers, keyCode, onChange }: Props) {
-  const { recording, pressed, start, stop } = useShortcutRecorder({
+  const { recording, pressed, exclusive, start, stop } = useShortcutRecorder({
     onCapture: (shortcut) => onChange(shortcut),
   });
 
@@ -69,7 +69,7 @@ export function ShortcutRecorder({ modifiers, keyCode, onChange }: Props) {
         )}
       </Box>
 
-      <Stack direction="row" spacing={2}>
+      <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
         {recording ? (
           <Button variant="outlined" onClick={stop}>
             Cancel
@@ -82,6 +82,14 @@ export function ShortcutRecorder({ modifiers, keyCode, onChange }: Props) {
           >
             Record shortcut
           </Button>
+        )}
+
+        {recording && (
+          <Typography variant="caption" color="text.secondary">
+            {exclusive
+              ? 'Keyboard captured — shortcuts won’t trigger. Esc cancels.'
+              : 'Combinations Windows reserves may trigger instead of recording.'}
+          </Typography>
         )}
       </Stack>
     </Stack>

@@ -39,7 +39,33 @@ export const IpcChannel = {
   WindowToggleFullscreen: 'kiyro:window:toggle-fullscreen',
   WindowShowAbout: 'kiyro:window:show-about',
   AppsBrowseExecutable: 'kiyro:apps:browse-executable',
+  AppsListBrowsers: 'kiyro:apps:list-browsers',
+  ShortcutCaptureStart: 'kiyro:shortcut:capture-start',
+  ShortcutCaptureStop: 'kiyro:shortcut:capture-stop',
+  ShortcutCaptureUpdate: 'kiyro:shortcut:capture-update',
+  ActiveProfileChanged: 'kiyro:profiles:active-changed',
 } as const;
+
+/** One browser found in the registry — see `electron/win-browsers.ts`. */
+export interface InstalledBrowser {
+  id: string;
+  name: string;
+  path: string;
+  isDefault: boolean;
+}
+
+/**
+ * Pushed while the shortcut recorder holds an exclusive keyboard capture
+ * (`electron/win-keyboard-hook.ts`).
+ *
+ * `modifiers` is live feedback as they are held down; `captured` arrives once
+ * with the finished combination and means capture has already ended;
+ * `cancelled` means it ended without one (Escape, or the safety timeout).
+ */
+export type ShortcutCaptureUpdate =
+  | { kind: 'modifiers'; modifiers: string[] }
+  | { kind: 'captured'; modifiers: string[]; key: string }
+  | { kind: 'cancelled'; reason: 'escape' | 'timeout' };
 
 /** Pushed from main whenever the real serial connection's state changes. */
 export interface DeviceStatusPayload {
@@ -120,7 +146,28 @@ export interface KiyroBridge {
      * somewhere different. Resolves `null` if the user cancels.
      */
     browseForExecutable(): Promise<string | null>;
+    /**
+     * Browsers actually installed on this machine, read from the registry
+     * (`electron/win-browsers.ts`). Empty on non-Windows. The default browser
+     * sorts first and is flagged.
+     */
+    listBrowsers(): Promise<InstalledBrowser[]>;
   };
+  /**
+   * Exclusive keyboard capture for the shortcut recorder. While `start` is in
+   * effect the main process swallows every keystroke system-wide, so
+   * combinations Windows would otherwise claim first (Ctrl+Shift+Esc,
+   * Alt+Tab, the Windows key) can be recorded. Resolves `false` if capture
+   * could not be installed, in which case the caller must fall back to DOM
+   * key events.
+   */
+  shortcutCapture: {
+    start(): Promise<boolean>;
+    stop(): Promise<void>;
+    onUpdate(callback: (payload: ShortcutCaptureUpdate) => void): () => void;
+  };
+  /** Fired when the main process switches profiles on its own — see the `profile` action. */
+  onActiveProfileChanged(callback: (payload: { profileId: string }) => void): () => void;
   /** So the renderer can lay out its own title bar around the OS's caption buttons/traffic lights, which sit on opposite sides. */
   platform: 'win32' | 'darwin' | 'linux';
 }

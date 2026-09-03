@@ -1,4 +1,10 @@
-import { MEDIA_LABELS, SCROLL_LABELS, SYSTEM_LABELS, VOLUME_LABELS } from './catalog';
+import {
+  MEDIA_LABELS,
+  PROFILE_LABELS,
+  SCROLL_LABELS,
+  SYSTEM_LABELS,
+  VOLUME_LABELS,
+} from './catalog';
 import { keyLabel, modifierLabel, sortModifiers } from './keys';
 import type { Modifier } from './keys';
 import type { Action } from './types';
@@ -62,12 +68,17 @@ export function describeAction(action: Action): ActionLabel {
         full: `Media · ${MEDIA_LABELS[action.command]}`,
       };
 
-    case 'volume':
+    case 'volume': {
+      // Mute has no step; for up/down the step is the whole point of the
+      // setting, so it belongs in the description — without it two bindings
+      // that behave very differently render identically.
+      const step = action.command === 'mute' ? null : (action.step ?? 1);
       return {
         primary: VOLUME_LABELS[action.command],
-        secondary: 'Volume',
-        full: `Volume · ${VOLUME_LABELS[action.command]}`,
+        secondary: step === null ? 'Volume' : `${step} step${step === 1 ? '' : 's'}`,
+        full: `Volume · ${VOLUME_LABELS[action.command]}${step === null ? '' : ` (${step})`}`,
       };
+    }
 
     case 'scroll':
       return {
@@ -95,6 +106,13 @@ export function describeAction(action: Action): ActionLabel {
         primary: truncate(action.label || 'Application', 18),
         secondary: 'App',
         full: `Application · ${action.label || action.target || 'Not configured'}`,
+      };
+
+    case 'profile':
+      return {
+        primary: PROFILE_LABELS[action.command],
+        secondary: 'Profile',
+        full: `Profile · ${PROFILE_LABELS[action.command]}`,
       };
 
     default:

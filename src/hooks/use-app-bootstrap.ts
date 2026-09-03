@@ -163,6 +163,7 @@ export function useAppBootstrap(): void {
     let unsubscribeElectronEvents: (() => void) | undefined;
     let unsubscribeElectronOutcomes: (() => void) | undefined;
     let unsubscribeElectronStatus: (() => void) | undefined;
+    let unsubscribeActiveProfile: (() => void) | undefined;
 
     if (isElectron()) {
       let frameId = 0;
@@ -184,6 +185,16 @@ export function useAppBootstrap(): void {
       unsubscribeElectronStatus = window.kiyro?.device.onStatus((payload) => {
         if (payload.status !== 'connected') useLiveInputStore.getState().clear();
       });
+
+      // A `profile` binding was pressed on the pad. Main already switched —
+      // it owns that decision so profile keys work with no window open (see
+      // `electron/execution-pipeline.ts`) — so this only catches the UI up.
+      // `setActive` re-persists the same id and re-pushes the same bindings,
+      // both of which are no-ops here rather than a loop back into main.
+      unsubscribeActiveProfile = window.kiyro?.onActiveProfileChanged(({ profileId }) => {
+        if (useProfileStore.getState().activeProfileId === profileId) return;
+        useProfileStore.getState().setActive(profileId);
+      });
     }
 
     return () => {
@@ -193,6 +204,7 @@ export function useAppBootstrap(): void {
       unsubscribeElectronEvents?.();
       unsubscribeElectronOutcomes?.();
       unsubscribeElectronStatus?.();
+      unsubscribeActiveProfile?.();
       wired = false;
     };
   }, []);

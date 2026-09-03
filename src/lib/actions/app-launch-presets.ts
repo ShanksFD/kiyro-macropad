@@ -21,12 +21,15 @@ export interface AppLaunchPreset {
  * reliable way to add one precisely rather than guessing an install
  * location — every machine's is different.
  */
+/**
+ * Note there is no "Default Browser" entry here any more. It used to target
+ * `about:blank`, which could never work — `about:` is an internal browser
+ * scheme with no Windows protocol handler, so the OS answered with "You'll
+ * need a new app to open this about link" instead of launching anything.
+ * Browsers are now detected for real and listed separately by the form
+ * (`electron/win-browsers.ts`), which also lets the user pick *which* one.
+ */
 export const APP_LAUNCH_PRESETS: readonly AppLaunchPreset[] = [
-  {
-    id: 'default-browser',
-    label: 'Default Browser',
-    action: { type: 'application', label: 'Default Browser', target: 'about:blank', kind: 'uri' },
-  },
   {
     id: 'discord',
     label: 'Discord',

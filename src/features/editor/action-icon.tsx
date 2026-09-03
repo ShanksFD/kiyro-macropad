@@ -11,6 +11,7 @@ import {
   MouseIcon,
   PowerSettingsNewIcon,
   AppsIcon,
+  LayersIcon,
   RemoveIcon,
 } from '@/components/icons';
 import type { ActionType } from '@/lib/actions/types';
@@ -26,6 +27,7 @@ const ICONS: Record<ActionType, React.ComponentType<MuiTablerIconProps>> = {
   mouse: MouseIcon,
   system: PowerSettingsNewIcon,
   application: AppsIcon,
+  profile: LayersIcon,
 };
 
 /** One icon per action type, used everywhere an action is listed. */

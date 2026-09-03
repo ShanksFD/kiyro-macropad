@@ -2,6 +2,7 @@ import type {
   Action,
   ActionType,
   MediaCommand,
+  ProfileCommand,
   ScrollDirection,
   SystemCommand,
   VolumeCommand,
@@ -9,7 +10,7 @@ import type {
 
 /** Picker grouping. `none` is handled by the "Clear" affordance, not a tab. */
 export type ActionCategoryId =
-  'keyboard' | 'hotkey' | 'text' | 'media' | 'mouse' | 'system' | 'application';
+  'keyboard' | 'hotkey' | 'text' | 'media' | 'mouse' | 'system' | 'application' | 'profile';
 
 export type ActionAvailability =
   /** Fully modelled, editable, and understood by the current execution mode. */
@@ -51,9 +52,16 @@ export const ACTION_CATEGORIES: readonly ActionCategory[] = [
   {
     id: 'system',
     label: 'System',
-    description: 'Lock, sleep and screen capture.',
+    description: 'Lock, sleep, screen capture, power and shell shortcuts.',
     availability: 'available',
     types: ['system'],
+  },
+  {
+    id: 'profile',
+    label: 'Profile',
+    description: 'Switch which Kiyro profile the pad is using.',
+    availability: 'available',
+    types: ['profile'],
   },
   {
     id: 'keyboard',
@@ -99,6 +107,7 @@ export const ACTION_AVAILABILITY: Record<ActionType, ActionAvailability> = {
   mouse: 'available',
   system: 'available',
   application: 'available',
+  profile: 'available',
 };
 
 export function isPlannedAction(action: Action): boolean {
@@ -123,6 +132,8 @@ export function categoryOfAction(action: Action): ActionCategoryId | null {
       return 'system';
     case 'application':
       return 'application';
+    case 'profile':
+      return 'profile';
     default:
       return null;
   }
@@ -151,7 +162,31 @@ export const SCROLL_LABELS: Record<ScrollDirection, string> = {
 export const SYSTEM_LABELS: Record<SystemCommand, string> = {
   lock: 'Lock Screen',
   sleep: 'Sleep',
-  screenshot: 'Screenshot',
+  displayOff: 'Turn Off Displays',
+  screenshot: 'Screenshot (select area)',
+  screenshotFull: 'Screenshot (all screens)',
+  taskManager: 'Task Manager',
+  fileExplorer: 'File Explorer',
+  settings: 'Windows Settings',
+  showDesktop: 'Show Desktop',
+  signOut: 'Sign Out',
+  restart: 'Restart',
+  shutDown: 'Shut Down',
+};
+
+/**
+ * The three that end the session without asking. Surfaces that list system
+ * commands use this to warn rather than hardcoding the names again.
+ */
+export const DESTRUCTIVE_SYSTEM_COMMANDS: readonly SystemCommand[] = [
+  'signOut',
+  'restart',
+  'shutDown',
+];
+
+export const PROFILE_LABELS: Record<ProfileCommand, string> = {
+  next: 'Next Profile',
+  previous: 'Previous Profile',
 };
 
 /** Sensible starting point when a user switches an action to a new type. */
@@ -175,6 +210,8 @@ export function defaultActionOfType(type: ActionType): Action {
       return { type: 'system', command: 'lock' };
     case 'application':
       return { type: 'application', label: '', target: '', kind: 'path' };
+    case 'profile':
+      return { type: 'profile', command: 'next' };
     default:
       return { type: 'none' };
   }

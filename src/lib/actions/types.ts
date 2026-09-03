@@ -12,8 +12,35 @@ export type ScrollDirection = (typeof SCROLL_DIRECTIONS)[number];
 export const MOUSE_BUTTONS = ['left', 'right', 'middle'] as const;
 export type MouseButton = (typeof MOUSE_BUTTONS)[number];
 
-export const SYSTEM_COMMANDS = ['lock', 'sleep', 'screenshot'] as const;
+/**
+ * `screenshot` is the *region* capture (Win+Shift+S — Snipping Tool's
+ * overlay), not a full-screen grab. On a multi-monitor setup a full-screen
+ * capture is almost never what someone wants from a macro key: it silently
+ * grabs every display into one oversized image. `screenshotFull` keeps the
+ * old behaviour for anyone who does want it.
+ *
+ * Order here is the order the picker lists them in, so the everyday ones come
+ * first and the three irreversible ones (`signOut`/`restart`/`shutDown`) sit
+ * together at the end.
+ */
+export const SYSTEM_COMMANDS = [
+  'lock',
+  'sleep',
+  'displayOff',
+  'screenshot',
+  'screenshotFull',
+  'taskManager',
+  'fileExplorer',
+  'settings',
+  'showDesktop',
+  'signOut',
+  'restart',
+  'shutDown',
+] as const;
 export type SystemCommand = (typeof SYSTEM_COMMANDS)[number];
+
+export const PROFILE_COMMANDS = ['next', 'previous'] as const;
+export type ProfileCommand = (typeof PROFILE_COMMANDS)[number];
 
 /**
  * What a control does when it is triggered.
@@ -27,12 +54,22 @@ export type Action =
   | { type: 'hotkey'; modifiers: Modifier[]; key: string }
   | { type: 'text'; text: string }
   | { type: 'media'; command: MediaCommand }
+  /**
+   * `step` is how many volume notches one press moves. Windows' volume keys
+   * move 2 percentage points each, so `step: 1` is a 2% change, `step: 5` a
+   * 10% one — the slider is in Windows' own units, not percent.
+   */
   | { type: 'volume'; command: VolumeCommand; step?: number }
   | { type: 'scroll'; direction: ScrollDirection; amount: number }
-  /** Planned — no execution path exists yet. */
   | { type: 'mouse'; button: MouseButton }
-  /** Planned. */
   | { type: 'system'; command: SystemCommand }
+  /**
+   * Switches Kiyro's own active profile — the macro pad reconfiguring
+   * itself. Handled by the execution pipeline rather than the OS-level
+   * executor (`electron/execution-pipeline.ts`), since it changes Kiyro's
+   * state instead of pressing anything.
+   */
+  | { type: 'profile'; command: ProfileCommand }
   /**
    * Launches or focuses an application. `kind` says how `target` is opened:
    * `'path'` is an absolute file path (an .exe, typically chosen via the

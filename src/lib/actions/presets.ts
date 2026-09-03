@@ -74,9 +74,60 @@ export const ACTION_PRESETS: readonly ActionPreset[] = [
   preset('sleep', 'Sleep', { type: 'system', command: 'sleep' }, 'suspend power'),
   preset(
     'screenshot',
-    'Screenshot',
+    'Screenshot (select area)',
     { type: 'system', command: 'screenshot' },
-    'screen capture snip win print',
+    'screen capture snip snipping tool win shift s region',
+  ),
+  preset(
+    'screenshot-full',
+    'Screenshot (all screens)',
+    { type: 'system', command: 'screenshotFull' },
+    'screen capture win print fullscreen monitors',
+  ),
+  preset(
+    'display-off',
+    'Turn Off Displays',
+    { type: 'system', command: 'displayOff' },
+    'monitor screen blank power',
+  ),
+  preset(
+    'task-manager',
+    'Task Manager',
+    { type: 'system', command: 'taskManager' },
+    'ctrl shift esc processes taskmgr',
+  ),
+  preset(
+    'file-explorer',
+    'File Explorer',
+    { type: 'system', command: 'fileExplorer' },
+    'win e files folder',
+  ),
+  preset(
+    'windows-settings',
+    'Windows Settings',
+    { type: 'system', command: 'settings' },
+    'win i preferences control panel',
+  ),
+  preset(
+    'show-desktop',
+    'Show Desktop',
+    { type: 'system', command: 'showDesktop' },
+    'win d minimise minimize',
+  ),
+  preset('sign-out', 'Sign Out', { type: 'system', command: 'signOut' }, 'log off logout session'),
+  preset('restart', 'Restart', { type: 'system', command: 'restart' }, 'reboot power'),
+  preset('shut-down', 'Shut Down', { type: 'system', command: 'shutDown' }, 'power off turn off'),
+  preset(
+    'next-profile',
+    'Next Profile',
+    { type: 'profile', command: 'next' },
+    'switch cycle layer preset',
+  ),
+  preset(
+    'previous-profile',
+    'Previous Profile',
+    { type: 'profile', command: 'previous' },
+    'switch cycle layer preset back',
   ),
   // Same built-in apps as the "Application" tab's own quick-picks
   // (`app-launch-presets.ts`) — kept in one place, spread in here so they're

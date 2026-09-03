@@ -17,8 +17,10 @@ import type {
   DeviceEventPayload,
   DeviceStatusPayload,
   ExecutionOutcomePayload,
+  InstalledBrowser,
   KiyroBridge,
   SetActiveProfilePayload,
+  ShortcutCaptureUpdate,
 } from '../src/lib/electron/ipc-types';
 import type { MacroProfile } from '../src/lib/profiles/types';
 import type { Preferences } from '../src/lib/preferences/schema';
@@ -44,6 +46,11 @@ const Channel = {
   WindowToggleFullscreen: 'kiyro:window:toggle-fullscreen',
   WindowShowAbout: 'kiyro:window:show-about',
   AppsBrowseExecutable: 'kiyro:apps:browse-executable',
+  AppsListBrowsers: 'kiyro:apps:list-browsers',
+  ShortcutCaptureStart: 'kiyro:shortcut:capture-start',
+  ShortcutCaptureStop: 'kiyro:shortcut:capture-stop',
+  ShortcutCaptureUpdate: 'kiyro:shortcut:capture-update',
+  ActiveProfileChanged: 'kiyro:profiles:active-changed',
 } as const;
 
 function on<T>(channel: string, callback: (payload: T) => void): () => void {
@@ -86,7 +93,16 @@ const kiyroBridge: KiyroBridge = {
   apps: {
     browseForExecutable: (): Promise<string | null> =>
       ipcRenderer.invoke(Channel.AppsBrowseExecutable),
+    listBrowsers: (): Promise<InstalledBrowser[]> => ipcRenderer.invoke(Channel.AppsListBrowsers),
   },
+  shortcutCapture: {
+    start: (): Promise<boolean> => ipcRenderer.invoke(Channel.ShortcutCaptureStart),
+    stop: (): Promise<void> => ipcRenderer.invoke(Channel.ShortcutCaptureStop),
+    onUpdate: (callback: (payload: ShortcutCaptureUpdate) => void) =>
+      on(Channel.ShortcutCaptureUpdate, callback),
+  },
+  onActiveProfileChanged: (callback: (payload: { profileId: string }) => void) =>
+    on(Channel.ActiveProfileChanged, callback),
   platform: process.platform as 'win32' | 'darwin' | 'linux',
 };
 

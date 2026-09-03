@@ -44,7 +44,10 @@ import { buildMacAppMenu, showAboutDialog } from './menu';
 import { createTray, setTrayConnected } from './tray';
 import { ExecutionPipeline } from './execution-pipeline';
 import { registerIpcHandlers } from './ipc-handlers';
+import { listInstalledBrowsers } from './win-browsers';
+import * as keyboardCapture from './win-keyboard-hook';
 import { IpcChannel } from '../src/lib/electron/ipc-types';
+import type { ShortcutCaptureUpdate } from '../src/lib/electron/ipc-types';
 
 // Straight to Configure — there's no separate home/landing page (see the
 // packaged-build branch of `createWindow()` below for the full reasoning).
@@ -196,7 +199,16 @@ async function createWindow(): Promise<void> {
 
   window.on('closed', () => {
     if (mainWindow === window) mainWindow = null;
+    keyboardCapture.stopCapture();
   });
+
+  // Belt-and-braces for the shortcut recorder's exclusive keyboard capture:
+  // it swallows every keystroke on the machine while active, so it must not
+  // be able to outlive the window that asked for it. Its own timeout already
+  // covers a renderer that never calls stop; these cover a window that goes
+  // away or loses focus mid-capture.
+  window.on('blur', () => keyboardCapture.stopCapture());
+  window.on('hide', () => keyboardCapture.stopCapture());
 
   // The default menu's File/Edit/Window entries are meant for a document
   // editor and mean nothing here (see menu.ts); its page-zoom shortcuts
@@ -292,6 +304,30 @@ if (!gotSingleInstanceLock) {
       return result.filePaths[0] ?? null;
     });
 
+    ipcMain.handle(IpcChannel.AppsListBrowsers, () => listInstalledBrowsers());
+
+    // Exclusive keyboard capture for the shortcut recorder. Every update is
+    // sent with `setImmediate` because these originate *inside* a low-level
+    // keyboard hook callback, which Windows discards entirely if it runs
+    // long — see the safety notes in `win-keyboard-hook.ts`.
+    const sendCaptureUpdate = (payload: ShortcutCaptureUpdate) => {
+      setImmediate(() => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send(IpcChannel.ShortcutCaptureUpdate, payload);
+        }
+      });
+    };
+
+    ipcMain.handle(IpcChannel.ShortcutCaptureStart, () =>
+      keyboardCapture.startCapture({
+        onModifiers: (modifiers) => sendCaptureUpdate({ kind: 'modifiers', modifiers }),
+        onCapture: ({ modifiers, key }) => sendCaptureUpdate({ kind: 'captured', modifiers, key }),
+        onCancel: (reason) => sendCaptureUpdate({ kind: 'cancelled', reason }),
+      }),
+    );
+
+    ipcMain.handle(IpcChannel.ShortcutCaptureStop, () => keyboardCapture.stopCapture());
+
     const pipeline = new ExecutionPipeline(() => mainWindow);
     registerIpcHandlers(pipeline);
     void createWindow();
@@ -327,6 +363,7 @@ if (!gotSingleInstanceLock) {
     // must also let the window actually close instead of just hiding.
     app.on('before-quit', () => {
       isQuitting = true;
+      keyboardCapture.stopCapture();
     });
 
     app.on('window-all-closed', () => {

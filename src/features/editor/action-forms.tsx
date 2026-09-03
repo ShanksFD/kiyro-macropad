@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -21,17 +22,26 @@ import {
   KeyboardCommandKeyIcon,
 } from '@/components/icons';
 import { APP_LAUNCH_PRESETS } from '@/lib/actions/app-launch-presets';
-import { MEDIA_LABELS, SCROLL_LABELS, SYSTEM_LABELS, VOLUME_LABELS } from '@/lib/actions/catalog';
+import {
+  DESTRUCTIVE_SYSTEM_COMMANDS,
+  MEDIA_LABELS,
+  PROFILE_LABELS,
+  SCROLL_LABELS,
+  SYSTEM_LABELS,
+  VOLUME_LABELS,
+} from '@/lib/actions/catalog';
 import { MODIFIERS, modifierLabel } from '@/lib/actions/keys';
 import type { Modifier } from '@/lib/actions/keys';
 import {
   MEDIA_COMMANDS,
   MOUSE_BUTTONS,
+  PROFILE_COMMANDS,
   SCROLL_DIRECTIONS,
   SYSTEM_COMMANDS,
   VOLUME_COMMANDS,
 } from '@/lib/actions/types';
-import type { Action } from '@/lib/actions/types';
+import type { Action, SystemCommand } from '@/lib/actions/types';
+import type { InstalledBrowser } from '@/lib/electron/ipc-types';
 import { useKiyroBridge } from '@/hooks/use-kiyro-bridge';
 import { fontStack } from '@/theme/theme';
 import { radius } from '@/theme/tokens';
@@ -117,7 +127,7 @@ export function ActionForm({ action, onChange }: FormProps) {
 
           {action.command !== 'mute' && (
             <StepSlider
-              label="Steps per detent"
+              label={`Steps per press — about ${(action.step ?? 1) * 2}% volume`}
               value={action.step ?? 1}
               max={10}
               onChange={(step) => onChange({ ...action, step })}
@@ -178,6 +188,9 @@ export function ActionForm({ action, onChange }: FormProps) {
       );
 
     case 'system':
+      return <SystemForm action={action} onChange={onChange} />;
+
+    case 'profile':
       return (
         <Stack spacing={3}>
           <TextField
@@ -185,23 +198,21 @@ export function ActionForm({ action, onChange }: FormProps) {
             value={action.command}
             onChange={(event) =>
               onChange({
-                type: 'system',
-                command: event.target.value as (typeof SYSTEM_COMMANDS)[number],
+                type: 'profile',
+                command: event.target.value as (typeof PROFILE_COMMANDS)[number],
               })
             }
           >
-            {SYSTEM_COMMANDS.map((command) => (
+            {PROFILE_COMMANDS.map((command) => (
               <MenuItem key={command} value={command}>
-                {SYSTEM_LABELS[command]}
+                {PROFILE_LABELS[command]}
               </MenuItem>
             ))}
           </TextField>
-          {action.command === 'sleep' && (
-            <Alert severity="info" variant="outlined">
-              Sends the same signal the hardware Sleep key would. Whether the computer actually
-              sleeps depends on its power-plan settings, same as pressing that key would.
-            </Alert>
-          )}
+          <Alert severity="info" variant="outlined">
+            Cycles through your saved profiles in order, wrapping around at the end. Needs at least
+            two profiles to do anything. This works even with Kiyro’s window closed.
+          </Alert>
         </Stack>
       );
 
@@ -215,6 +226,62 @@ export function ActionForm({ action, onChange }: FormProps) {
         </Typography>
       );
   }
+}
+
+/** Per-command caveats worth stating in the editor rather than discovering by pressing the key. */
+const SYSTEM_NOTES: Partial<Record<SystemCommand, string>> = {
+  sleep:
+    'Asks Windows to sleep directly. Whether it actually does still depends on the machine’s power plan and drivers.',
+  screenshot:
+    'Opens the Snipping Tool overlay (Win + Shift + S) so you choose the area — the right choice with more than one monitor.',
+  screenshotFull:
+    'Captures every display at once into one image, saved to Pictures\\Screenshots.',
+  displayOff: 'Displays come back on at the next key press or mouse move.',
+};
+
+function SystemForm({
+  action,
+  onChange,
+}: {
+  action: Extract<Action, { type: 'system' }>;
+  onChange: (action: Action) => void;
+}) {
+  const destructive = DESTRUCTIVE_SYSTEM_COMMANDS.includes(action.command);
+  const note = SYSTEM_NOTES[action.command];
+
+  return (
+    <Stack spacing={3}>
+      <TextField
+        select
+        value={action.command}
+        onChange={(event) =>
+          onChange({
+            type: 'system',
+            command: event.target.value as (typeof SYSTEM_COMMANDS)[number],
+          })
+        }
+      >
+        {SYSTEM_COMMANDS.map((command) => (
+          <MenuItem key={command} value={command}>
+            {SYSTEM_LABELS[command]}
+          </MenuItem>
+        ))}
+      </TextField>
+
+      {destructive && (
+        <Alert severity="warning" variant="outlined">
+          This runs the moment the key is pressed, with no confirmation, and closes anything you
+          have open without saving.
+        </Alert>
+      )}
+
+      {note && (
+        <Alert severity="info" variant="outlined">
+          {note}
+        </Alert>
+      )}
+    </Stack>
+  );
 }
 
 /**
@@ -232,6 +299,24 @@ function ApplicationForm({
   onChange: (action: Action) => void;
 }) {
   const kiyro = useKiyroBridge();
+  const [browsers, setBrowsers] = useState<InstalledBrowser[]>([]);
+
+  // Read once per mount of this form. The registry is the source of truth
+  // (see `electron/win-browsers.ts`), and a browser install/uninstall while
+  // this exact form is open is not worth watching for.
+  useEffect(() => {
+    if (!kiyro) return;
+    let cancelled = false;
+    void kiyro.apps
+      .listBrowsers()
+      .then((found) => {
+        if (!cancelled) setBrowsers(found);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [kiyro]);
 
   const browse = async () => {
     const path = await kiyro?.apps.browseForExecutable();
@@ -251,6 +336,33 @@ function ApplicationForm({
 
   return (
     <Stack spacing={3}>
+      {browsers.length > 0 && (
+        <Stack spacing={1.5}>
+          <Typography variant="caption" color="text.secondary">
+            Browsers on this computer
+          </Typography>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
+            {browsers.map((browser) => (
+              <Chip
+                key={browser.id}
+                label={browser.isDefault ? `${browser.name} (default)` : browser.name}
+                onClick={() =>
+                  onChange({
+                    type: 'application',
+                    label: browser.name,
+                    target: browser.path,
+                    kind: 'path',
+                  })
+                }
+                variant={action.target === browser.path ? 'filled' : 'outlined'}
+                color={action.target === browser.path ? 'primary' : 'default'}
+                clickable
+              />
+            ))}
+          </Box>
+        </Stack>
+      )}
+
       <Stack spacing={1.5}>
         <Typography variant="caption" color="text.secondary">
           Quick pick

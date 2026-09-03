@@ -19,82 +19,37 @@ import type {
 } from '../src/lib/execution/executor';
 import type { Action } from '../src/lib/actions/types';
 import { sendKeyEvent, sendMouseClick, sendMouseWheel, sendUnicodeChar } from './win-sendinput';
-
-const VK_BACK = 0x08;
-const VK_TAB = 0x09;
-const VK_RETURN = 0x0d;
-const VK_SHIFT = 0x10;
-const VK_CONTROL = 0x11;
-const VK_MENU = 0x12; // Alt
-const VK_ESCAPE = 0x1b;
-const VK_SPACE = 0x20;
-const VK_PRIOR = 0x21; // Page Up
-const VK_NEXT = 0x22; // Page Down
-const VK_END = 0x23;
-const VK_HOME = 0x24;
-const VK_LEFT = 0x25;
-const VK_UP = 0x26;
-const VK_RIGHT = 0x27;
-const VK_DOWN = 0x28;
-const VK_DELETE = 0x2e;
-const VK_L = 0x4c;
-const VK_LWIN = 0x5b;
-/** The dedicated hardware Sleep key. Synthesizing it asks Windows to sleep the same way the physical key would — whether anything actually happens depends on the machine's own power-plan/OEM support, same as pressing the real key would. */
-const VK_SLEEP = 0x5f;
-/** Print Screen. Alone it copies to the clipboard; combined with the Windows key (below) Windows 10/11 auto-saves it to Pictures\Screenshots instead. */
-const VK_SNAPSHOT = 0x2c;
-const VK_VOLUME_MUTE = 0xad;
-const VK_VOLUME_DOWN = 0xae;
-const VK_VOLUME_UP = 0xaf;
-const VK_MEDIA_NEXT_TRACK = 0xb0;
-const VK_MEDIA_PREV_TRACK = 0xb1;
-const VK_MEDIA_STOP = 0xb2;
-const VK_MEDIA_PLAY_PAUSE = 0xb3;
-
-/** `KeyboardEvent.code` (`@/lib/actions/keys.ts`'s catalogue) -> Windows virtual-key code. */
-const CODE_TO_VK: Record<string, number> = {
-  Enter: VK_RETURN,
-  Space: VK_SPACE,
-  Tab: VK_TAB,
-  Backspace: VK_BACK,
-  Delete: VK_DELETE,
-  Escape: VK_ESCAPE,
-  ArrowUp: VK_UP,
-  ArrowDown: VK_DOWN,
-  ArrowLeft: VK_LEFT,
-  ArrowRight: VK_RIGHT,
-  Home: VK_HOME,
-  End: VK_END,
-  // Selectable in `KeySelect` (`@/lib/actions/keys.ts`) but had no VK entry
-  // here until now — the "Print Screen" preset (`presets.ts`) silently
-  // failed as unavailable at execution time despite looking configured.
-  PrintScreen: VK_SNAPSHOT,
-  PageUp: VK_PRIOR,
-  PageDown: VK_NEXT,
-};
-for (let n = 0; n < 26; n += 1) CODE_TO_VK[`Key${String.fromCharCode(65 + n)}`] = 0x41 + n;
-for (let n = 0; n < 10; n += 1) CODE_TO_VK[`Digit${n}`] = 0x30 + n;
-for (let n = 1; n <= 12; n += 1) CODE_TO_VK[`F${n}`] = 0x70 + (n - 1);
-
-const MODIFIER_TO_VK: Record<string, number> = {
-  Control: VK_CONTROL,
-  Shift: VK_SHIFT,
-  Alt: VK_MENU,
-  Meta: VK_LWIN,
-};
+import { CODE_TO_VK, MODIFIER_TO_VK, VK } from './win-vk';
+import {
+  lockWorkstation,
+  openTaskManager,
+  restartComputer,
+  shutDownComputer,
+  signOut,
+  suspendToSleep,
+  turnOffDisplays,
+} from './win-system';
 
 const MEDIA_COMMAND_TO_VK: Record<string, number> = {
-  playPause: VK_MEDIA_PLAY_PAUSE,
-  next: VK_MEDIA_NEXT_TRACK,
-  previous: VK_MEDIA_PREV_TRACK,
-  stop: VK_MEDIA_STOP,
+  playPause: VK.MEDIA_PLAY_PAUSE,
+  next: VK.MEDIA_NEXT_TRACK,
+  previous: VK.MEDIA_PREV_TRACK,
+  stop: VK.MEDIA_STOP,
 };
 
 const VOLUME_COMMAND_TO_VK: Record<string, number> = {
-  up: VK_VOLUME_UP,
-  down: VK_VOLUME_DOWN,
-  mute: VK_VOLUME_MUTE,
+  up: VK.VOLUME_UP,
+  down: VK.VOLUME_DOWN,
+  mute: VK.VOLUME_MUTE,
 };
+
+/**
+ * Upper bound on `step` taps, matching `actionSchema`'s own max
+ * (`@/lib/actions/schema.ts`). A profile edited by hand could carry a larger
+ * number; clamping here means the worst case is a wrong-but-brief volume
+ * change rather than a thousand synthetic key presses.
+ */
+const MAX_VOLUME_STEP = 20;
 
 const TAP_DELAY_MS = 10;
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -112,6 +67,15 @@ async function combo(modifierVks: number[], keyVk: number): Promise<void> {
   await sleep(TAP_DELAY_MS);
   await tap(keyVk);
   for (const vk of [...modifierVks].reverse()) sendKeyEvent(vk, true);
+}
+
+/** Taps the same key `count` times in a row — how `step` on a volume action is honoured. */
+async function tapRepeatedly(vk: number, count: number): Promise<void> {
+  for (let n = 0; n < count; n += 1) {
+    // Sequential by design: these must land as distinct key presses, not a
+    // burst Windows is free to coalesce into one volume change.
+    await tap(vk);
+  }
 }
 
 /** Types a string one character at a time via `KEYEVENTF_UNICODE`, so it works regardless of keyboard layout. */
@@ -200,7 +164,17 @@ export class NativeActionExecutor implements ActionExecutor {
       case 'volume': {
         const vk = VOLUME_COMMAND_TO_VK[action.command];
         if (vk === undefined) return unavailable(`unknown volume command '${action.command}'`);
-        void tap(vk);
+
+        // `step` used to be stored, shown in the editor, and then ignored
+        // here — every volume action tapped the key exactly once regardless,
+        // which is why the volume always moved by Windows' fixed 2% no matter
+        // what the slider said. Mute has no magnitude, so it stays one tap.
+        if (action.command === 'mute') {
+          void tap(vk);
+        } else {
+          const step = Math.min(Math.max(Math.trunc(action.step ?? 1), 1), MAX_VOLUME_STEP);
+          void tapRepeatedly(vk, step);
+        }
         return { status: 'executed', by: this.id };
       }
 
@@ -231,19 +205,68 @@ export class NativeActionExecutor implements ActionExecutor {
       case 'system': {
         switch (action.command) {
           case 'lock':
-            // Win+L — the standard Windows lock shortcut, same mechanism as
-            // any other hotkey binding, just hardcoded instead of user-chosen.
-            void combo([VK_LWIN], VK_L);
+            // Not a synthesized Win+L, which is what this used to do and why
+            // it never worked: Windows ignores an injected Win+L on purpose.
+            // See `win-system.ts`.
+            lockWorkstation();
             return { status: 'executed', by: this.id };
+
           case 'sleep':
-            void tap(VK_SLEEP);
+            // Likewise not a `VK_SLEEP` tap — most machines have no such key
+            // and nothing listens for it. See `win-system.ts`.
+            suspendToSleep();
             return { status: 'executed', by: this.id };
+
+          case 'displayOff':
+            turnOffDisplays();
+            return { status: 'executed', by: this.id };
+
           case 'screenshot':
+            // Win+Shift+S: Snipping Tool's region overlay, so the user picks
+            // what to capture. On a multi-monitor setup the full-screen grab
+            // this used to do produced one huge image spanning every display,
+            // which is almost never what was wanted.
+            void combo([VK.LWIN, VK.SHIFT], VK.S);
+            return { status: 'executed', by: this.id };
+
+          case 'screenshotFull':
             // Win+PrintScreen, not plain PrintScreen — saves a file to
             // Pictures\Screenshots automatically instead of only copying to
             // the clipboard with nothing visible having happened.
-            void combo([VK_LWIN], VK_SNAPSHOT);
+            void combo([VK.LWIN], VK.SNAPSHOT);
             return { status: 'executed', by: this.id };
+
+          case 'taskManager':
+            // Launched directly rather than as Ctrl+Shift+Esc: the shell
+            // hotkey is claimed above the normal input queue, so an injected
+            // one is unreliable.
+            openTaskManager();
+            return { status: 'executed', by: this.id };
+
+          case 'fileExplorer':
+            void combo([VK.LWIN], VK.E);
+            return { status: 'executed', by: this.id };
+
+          case 'settings':
+            void combo([VK.LWIN], VK.I);
+            return { status: 'executed', by: this.id };
+
+          case 'showDesktop':
+            void combo([VK.LWIN], VK.D);
+            return { status: 'executed', by: this.id };
+
+          case 'signOut':
+            signOut();
+            return { status: 'executed', by: this.id };
+
+          case 'restart':
+            restartComputer();
+            return { status: 'executed', by: this.id };
+
+          case 'shutDown':
+            shutDownComputer();
+            return { status: 'executed', by: this.id };
+
           default:
             // Unreachable as long as `SYSTEM_COMMANDS` (types.ts) and this
             // switch agree — TS proves that by narrowing `action` to `never`
@@ -254,6 +277,13 @@ export class NativeActionExecutor implements ActionExecutor {
             return unavailable('unknown system command', controlId);
         }
       }
+
+      case 'profile':
+        // Handled a layer up, in `execution-pipeline.ts`: switching profiles
+        // changes Kiyro's own state and needs the profile list, neither of
+        // which this stateless OS-level executor has. Reaching here means the
+        // pipeline's own dispatch missed it.
+        return unavailable('profile actions are handled by the execution pipeline', controlId);
 
       default:
         return unavailable('unrecognised action type');

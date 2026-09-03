@@ -63,6 +63,21 @@ export function ActionPicker({ value, onChange }: Props) {
 
   const currentType = categoryOfAction(value) === category ? value.type : activeCategory.types[0]!;
 
+  /**
+   * What the form below edits.
+   *
+   * `value` is the binding; this is the *draft* shown for it. They differ only
+   * while the binding is empty — after "Clear", or on a control that was never
+   * assigned. Rendering `value` directly there collapsed the whole form to the
+   * single line "Pick a category to assign an action", even though a category
+   * was plainly selected right above it, and it only came back once the user
+   * happened to click a tab (which re-seeded `value` as a side effect). Now
+   * the category's own default is shown instead: the editor stays where it
+   * was, and the binding stays cleared until the user actually changes
+   * something in it.
+   */
+  const draft = value.type === 'none' ? defaultActionOfType(currentType) : value;
+
   const apply = (action: Action) => {
     onChange(action);
     remember(action);
@@ -183,7 +198,7 @@ export function ActionPicker({ value, onChange }: Props) {
           </ToggleButtonGroup>
         )}
 
-        <ActionForm action={value} onChange={onChange} />
+        <ActionForm action={draft} onChange={onChange} />
       </Stack>
 
       <Divider />
