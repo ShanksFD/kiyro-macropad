@@ -134,10 +134,24 @@ export class AppUpdater {
     }
   }
 
-  /** Explicit, user-initiated install — quits Kiyro, runs the downloaded installer, relaunches. Only meaningful once a download has actually finished. */
+  /**
+   * Explicit, user-initiated install — quits Kiyro, runs the downloaded
+   * installer, relaunches. Only meaningful once a download has actually
+   * finished.
+   *
+   * `quitAndInstall(true, true)`, not the zero-arg call: electron-updater's
+   * default is `isSilent: false`, which runs the NSIS installer *without*
+   * the `/S` silent flag — a full, visible setup wizard (license screen,
+   * directory picker, Next/Install buttons) pops up out of nowhere right
+   * after someone clicked what looked like a one-click "restart to update"
+   * button. That reads as broken, not as an update in progress, and is easy
+   * to accidentally cancel. `true, true` runs it silently and relaunches
+   * Kiyro on its own once done — no dialog, no click-through, matching what
+   * the button actually promised.
+   */
   quitAndInstall(): void {
     if (this.#status.state !== 'downloaded') return;
-    autoUpdater.quitAndInstall();
+    autoUpdater.quitAndInstall(true, true);
   }
 
   #setStatus(status: UpdaterStatusPayload): void {

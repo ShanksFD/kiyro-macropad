@@ -3,7 +3,7 @@
 import Chip from '@mui/material/Chip';
 import CircularProgress from '@mui/material/CircularProgress';
 import Tooltip from '@mui/material/Tooltip';
-import { DownloadIcon, RestartAltIcon } from '@/components/icons';
+import { DownloadIcon, ErrorOutlineIcon, RestartAltIcon } from '@/components/icons';
 import { useKiyroBridge } from '@/hooks/use-kiyro-bridge';
 import { useUpdateStore } from '@/stores/update-store';
 
@@ -11,8 +11,16 @@ import { useUpdateStore } from '@/stores/update-store';
  * The one place an available or downloaded update becomes visible without
  * anyone having to think to open the Help menu and ask (`WindowMenu`'s
  * "Check for Updates…" is the other way in). Renders nothing the rest of the
- * time — idle, still checking, already up to date, or a failed check all
- * look like no chip at all, on purpose, since none of them need action.
+ * time — idle, still checking, or already up to date all look like no chip
+ * at all, on purpose, since none of them need action.
+ *
+ * `'error'` is deliberately *not* one of those silent states, even though it
+ * used to be lumped in with them here: a download or install can fail for
+ * real reasons (corrupted download, permissions, antivirus quarantine, low
+ * disk space), and `electron-updater` reports that failure correctly — but
+ * this component previously rendered nothing for it, same as "nothing to
+ * do here." From the outside that looked exactly like "clicked update,
+ * nothing happened," with no way to tell a real failure apart from success.
  *
  * Clicking this chip is the action that actually starts a download or an
  * install — see `electron/updater.ts`'s doc comment for why checking runs on
@@ -21,6 +29,7 @@ import { useUpdateStore } from '@/stores/update-store';
 export function UpdateChip() {
   const kiyro = useKiyroBridge();
   const status = useUpdateStore((state) => state.status);
+  const setStatus = useUpdateStore((state) => state.setStatus);
 
   if (!kiyro) return null;
 
@@ -61,6 +70,21 @@ export function UpdateChip() {
             color="primary"
             clickable
             onClick={() => void kiyro.updater.quitAndInstall()}
+          />
+        </Tooltip>
+      );
+
+    case 'error':
+      return (
+        <Tooltip title={`${status.message} — click to check again`}>
+          <Chip
+            label="Update failed"
+            icon={<ErrorOutlineIcon sx={{ fontSize: 14 }} />}
+            size="small"
+            color="error"
+            variant="outlined"
+            clickable
+            onClick={() => void kiyro.updater.check().then(setStatus)}
           />
         </Tooltip>
       );

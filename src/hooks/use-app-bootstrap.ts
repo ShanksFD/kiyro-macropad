@@ -204,6 +204,13 @@ export function useAppBootstrap(): void {
       // checking/downloading, this only reflects it (see `update-store.ts`).
       unsubscribeUpdater = window.kiyro?.updater.onStatus((status) => {
         useUpdateStore.getState().setStatus(status);
+        // A download or install failing is worth surfacing even if nobody's
+        // looking at the sidebar chip right when it happens — this is the
+        // fix for a failure otherwise looking identical to nothing having
+        // happened at all (see `update-chip.tsx`'s doc comment).
+        if (status.state === 'error') {
+          useUiStore.getState().notify(`Update failed: ${status.message}`, 'error');
+        }
       });
 
       // Mirrors `electron/discord-rpc.ts`'s connection state — see `discord-store.ts`.
