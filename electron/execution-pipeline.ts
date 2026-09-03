@@ -10,7 +10,9 @@
  * chip). Losing that mirror (e.g. no window yet) must never affect execution.
  */
 
+import { Notification } from 'electron';
 import type { BrowserWindow } from 'electron';
+import path from 'node:path';
 import type {
   DeviceEventPayload,
   DeviceStatusPayload,
@@ -24,6 +26,11 @@ import { ActiveProfileStore, resolveControlEvent } from './resolve-control';
 import { nativeActionExecutor } from './native-execution';
 import { electronProfileStorage } from './profile-storage';
 import { SerialBridge } from './serial-bridge';
+
+// This file compiles to `dist-electron/electron/execution-pipeline.js`, the
+// same directory `main.ts` runs from, so the identical relative path resolves
+// to the same `electron/assets/icon.ico` its `WINDOW_ICON_PATH` uses.
+const NOTIFICATION_ICON_PATH = path.join(__dirname, '../../electron/assets/icon.ico');
 
 export class ExecutionPipeline {
   readonly bridge = new SerialBridge();
@@ -134,6 +141,35 @@ export class ExecutionPipeline {
 
     console.log(`[kiyro] profile switched to '${next.name}' (${next.id})`);
     this.#send(IpcChannel.ActiveProfileChanged, { profileId: next.id });
+    this.#notifyProfileSwitched(next.name);
+  }
+
+  /**
+   * A native Windows toast — the one piece of feedback that a `profile`
+   * binding did something even with Kiyro's window closed or hidden, which
+   * is the normal way this action gets used (see `#switchProfile`'s own
+   * comment: it works specifically so the window doesn't need to be open).
+   * Without this, cycling profiles from the pad while the window is hidden
+   * has no visible effect at all.
+   *
+   * `isSupported()` is what keeps this a no-op rather than a thrown error on
+   * a machine where Windows notifications are unavailable (disabled in
+   * Focus Assist settings, or — for `mac`/`linux` builds later — before
+   * permission has been granted).
+   */
+  #notifyProfileSwitched(name: string): void {
+    if (!Notification.isSupported()) return;
+
+    // `silent: true`: this action exists partly *for* cycling quickly (a
+    // "previous"/"next" pair on adjacent keys), and Windows' own toast sound
+    // firing on every tap would get old fast. The toast itself is still the
+    // point — it's the only feedback loop this action has.
+    new Notification({
+      title: 'Kiyro',
+      body: `Switched to "${name}"`,
+      icon: NOTIFICATION_ICON_PATH,
+      silent: true,
+    }).show();
   }
 
   #send(channel: string, payload: unknown): void {

@@ -65,6 +65,16 @@ const ASSETS_DIR = path.join(__dirname, '../../electron/assets');
 // `electron.exe` binary dev mode runs directly.
 const WINDOW_ICON_PATH = path.join(ASSETS_DIR, 'icon.ico');
 
+/**
+ * Must match `build.appId` (package.json) exactly. Windows groups toast
+ * notifications (`electron/execution-pipeline.ts`'s profile-switch toast) by
+ * this id — without it every notification comes from Electron's own default
+ * id and shows up branded "Electron" with Electron's icon, not "Kiyro"
+ * with Kiyro's, regardless of what `icon:`/`title:` the `Notification` call
+ * itself sets. Also needs to be set before `app.whenReady()`, not after.
+ */
+const APP_USER_MODEL_ID = 'com.kiyro.macropad';
+
 /** The app's own in-page title bar height — must match `layout.windowTitleBarHeight` (`src/theme/tokens.ts`), which is what the Windows caption-button overlay gets sized to below. */
 const TITLE_BAR_HEIGHT = 36;
 
@@ -239,6 +249,8 @@ const gotSingleInstanceLock = app.requestSingleInstanceLock();
 if (!gotSingleInstanceLock) {
   app.quit();
 } else {
+  if (process.platform === 'win32') app.setAppUserModelId(APP_USER_MODEL_ID);
+
   app.on('second-instance', () => {
     // Another launch attempt happened while we're already running — surface
     // our window instead of letting a second process fight us for the port.

@@ -109,7 +109,13 @@ export function KeyCap({ button, action, selected, showEventCode, onSelect }: Pr
                 </Box>
               )}
               {assigned && action && (
-                <ActionIcon type={action.type} sx={{ fontSize: 15, opacity: 0.75 }} />
+                <ActionIcon
+                  type={action.type}
+                  sx={{
+                    fontSize: 16,
+                    opacity: 0.75,
+                  }}
+                />
               )}
             </Stack>
           </Stack>
