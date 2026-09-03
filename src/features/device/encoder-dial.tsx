@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import Box from '@mui/material/Box';
 import ButtonBase from '@mui/material/ButtonBase';
 import Stack from '@mui/material/Stack';
@@ -10,7 +11,75 @@ import { describeAction } from '@/lib/actions/format';
 import type { Action, BindingMap } from '@/lib/actions/types';
 import type { ControlDescriptor, EncoderDescriptor } from '@/lib/devices/types';
 import { useLiveInputStore } from '@/stores/live-input-store';
-import { radius } from '@/theme/tokens';
+import { duration, easing, radius } from '@/theme/tokens';
+
+/**
+ * Degrees of visual rotation per detent. An aesthetic choice, not a reading
+ * of the hardware's actual detent count (which is not established — see
+ * `EncoderNormalizer`'s own doc comment on `pulsesPerStep`): 30° reads as a
+ * deliberate, felt step at one detent and as a smooth spin once several land
+ * close together, without the knob completing a lap in an unrealistically
+ * small number of clicks.
+ */
+const DEGREES_PER_STEP = 30;
+
+/**
+ * A real spin while turning, not a capped nudge — every detent advances this
+ * angle by `DEGREES_PER_STEP` in the turned direction, so a fast run of
+ * pulses reads as an actual multi-step rotation rather than one small flick.
+ * `rotate()` places no meaningful limit on the value, and the `transition` on
+ * `transform` (`EncoderDial`, below) is what turns a run of discrete jumps
+ * into a smooth spin when pulses land close together rather than a series of
+ * visible snaps.
+ *
+ * It springs back to 0 as soon as pulses stop (see the `direction === null`
+ * branch below) rather than staying at rest wherever it landed — the same
+ * transition that makes the spin itself smooth also makes the return read as
+ * a deliberate snap-back, not a jump cut.
+ *
+ * `cwAt`/`ccwAt` are the raw pulse timestamps from `live-input-store`'s
+ * `active` map (not just a boolean): every new pulse — even a same-direction
+ * one arriving while the previous pulse's highlight is still active —
+ * overwrites that timestamp, which is what lets this tell individual detents
+ * apart instead of seeing one contiguous "is turning" span.
+ *
+ * Deliberately not a `useEffect`, and deliberately not a ref either — this
+ * project's lint rules (a React Compiler-oriented ruleset) forbid reading or
+ * writing a ref during render, so "the last pulse seen" has to be ordinary
+ * state like everything else here. This is React's own "adjust state when a
+ * prop changes" pattern: comparing against a mirrored previous-value state
+ * during render and calling `setState` right there rather than after a
+ * commit, so it updates in the same render pass a new pulse arrives in,
+ * instead of one tick behind an effect.
+ */
+function useEncoderAngle(cwAt: number | undefined, ccwAt: number | undefined): number {
+  const [seen, setSeen] = useState({ cwAt, ccwAt });
+  const [angle, setAngle] = useState(0);
+
+  if (seen.cwAt !== cwAt || seen.ccwAt !== ccwAt) {
+    setSeen({ cwAt, ccwAt });
+
+    const direction: 'cw' | 'ccw' | null =
+      cwAt !== undefined && ccwAt !== undefined
+        ? cwAt >= ccwAt
+          ? 'cw'
+          : 'ccw'
+        : cwAt !== undefined
+          ? 'cw'
+          : ccwAt !== undefined
+            ? 'ccw'
+            : null;
+
+    if (direction === null) {
+      // Both pulses have faded — spring back to the first position.
+      setAngle(0);
+    } else {
+      setAngle(angle + (direction === 'cw' ? DEGREES_PER_STEP : -DEGREES_PER_STEP));
+    }
+  }
+
+  return angle;
+}
 
 interface Props {
   encoder: EncoderDescriptor;
@@ -29,14 +98,18 @@ const ROW_ICONS = {
 /**
  * A rotary encoder: the knob plus its four assignable gestures.
  *
- * The knob tilts in the direction the hardware actually turned, so a physical
- * twist is confirmed visually without reading any text.
+ * The knob spins in the direction the hardware actually turned — a genuine,
+ * unbounded rotation rather than a snap-back nudge, see `useEncoderAngle`
+ * above — so a physical twist is confirmed visually without reading any text.
  */
 export function EncoderDial({ encoder, bindings, selectedControlId, onSelect }: Props) {
   const active = useLiveInputStore((state) => state.active);
-  const turningCw = active[encoder.clockwise.id] !== undefined;
-  const turningCcw = active[encoder.counterClockwise.id] !== undefined;
+  const cwAt = active[encoder.clockwise.id];
+  const ccwAt = active[encoder.counterClockwise.id];
+  const turningCw = cwAt !== undefined;
+  const turningCcw = ccwAt !== undefined;
   const pressed = active[encoder.press.id] !== undefined;
+  const angleDeg = useEncoderAngle(cwAt, ccwAt);
 
   const rows: Array<{ control: ControlDescriptor; icon: React.ReactNode }> = [
     { control: encoder.clockwise, icon: ROW_ICONS.cw },
@@ -79,9 +152,18 @@ export function EncoderDial({ encoder, bindings, selectedControlId, onSelect }: 
             boxShadow: 'none',
             display: 'grid',
             placeItems: 'center',
-            transform: `translateY(${pressed ? 2 : 0}px) rotate(${turningCw ? 14 : turningCcw ? -14 : 0}deg)`,
+            transform: `translateY(${pressed ? 2 : 0}px) rotate(${angleDeg}deg)`,
+            // Two different feels on purpose: each detent should read as an
+            // immediate, snappy response (short duration, so a fast run of
+            // them still blends into a smooth spin — see `useEncoderAngle`),
+            // but the spring-back once turning stops is a much bigger jump in
+            // one go (as much as 330°) and needs real time and a decelerating
+            // ease to read as an animated return rather than a teleport. At
+            // the old single 140ms duration it was technically animating but
+            // too fast to perceive as anything but a snap.
             transition: theme.transitions.create(['transform', 'background-color'], {
-              duration: theme.transitions.duration.shorter,
+              duration: turningCw || turningCcw ? theme.transitions.duration.shorter : duration.slow,
+              easing: turningCw || turningCcw ? theme.transitions.easing.easeInOut : easing.out,
             }),
             ...((turningCw || turningCcw) && { bgcolor: 'device.keycapLive' }),
           })}

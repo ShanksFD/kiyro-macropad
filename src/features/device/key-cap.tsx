@@ -23,6 +23,32 @@ interface Props {
 }
 
 /**
+ * Positional colour grouping: the first key of every row is green, the last
+ * key of row 1 is orange, and every other key is white. Purely a visual
+ * layout choice — unrelated to `confidence`, assignment, or anything
+ * hardware-reported — so it lives here rather than on `ButtonDescriptor`
+ * itself.
+ *
+ * Written against `column`/`row` rather than a hardcoded key-id list so it
+ * keeps working if `esp32c3-macropad.ts`'s button order or ids ever change;
+ * it does assume the last column is column 4 (this device's layout), so a
+ * device with a different column count would need its own rule.
+ */
+type KeycapAccent = 'green' | 'orange' | 'white';
+
+function keycapAccent(button: ButtonDescriptor): KeycapAccent {
+  if (button.column === 1) return 'green';
+  if (button.column === 4 && button.row === 1) return 'orange';
+  return 'white';
+}
+
+const ACCENT_BG: Record<KeycapAccent, string> = {
+  green: 'device.keycapGreen',
+  orange: 'device.keycapOrange',
+  white: 'device.keycapWhite',
+};
+
+/**
  * A physical key.
  *
  * Depth comes from a hard bottom edge plus a soft ambient shadow; pressing —
@@ -36,6 +62,7 @@ export function KeyCap({ button, action, selected, showEventCode, onSelect }: Pr
   const label = describeAction(action ?? { type: 'none' });
   const assigned = action !== undefined && action.type !== 'none';
   const ambiguous = button.confidence === 'ambiguous';
+  const accent = keycapAccent(button);
 
   const description = assigned ? label.full : 'No action assigned';
 
@@ -57,8 +84,13 @@ export function KeyCap({ button, action, selected, showEventCode, onSelect }: Pr
           textAlign: 'left',
           overflow: 'hidden',
           boxShadow: 'none',
-          bgcolor: assigned ? 'device.keycapAssigned' : 'device.keycap',
-          color: 'device.legend',
+          // Every key gets a positional accent now, so it always wins over
+          // the old assigned/unassigned bg distinction (`keycapAssigned` vs
+          // `keycap`). That distinction still reads through the label text
+          // ("Unassigned" at reduced opacity) and the action icon, just not
+          // through this background any more.
+          bgcolor: ACCENT_BG[accent],
+          color: accent === 'white' ? 'device.legendOnWhite' : 'device.legend',
           border: '1px solid',
           borderColor: selected ? 'primary.main' : 'device.keycapEdge',
           // Flat — no drop shadow. Press/selected/live states read entirely
@@ -67,7 +99,12 @@ export function KeyCap({ button, action, selected, showEventCode, onSelect }: Pr
           transition: theme.transitions.create(['transform', 'background-color', 'border-color'], {
             duration: theme.transitions.duration.shorter,
           }),
-          '&:hover': { bgcolor: 'device.keycapHover' },
+          // An accent cap has nowhere lighter/darker to swap to on hover the
+          // way the old neutral keycap tone did (`keycapHover` would read as
+          // a colour clash against green/orange/white, not a lift) — a
+          // brightness filter keeps the same "lit up" read without
+          // introducing an unrelated hue.
+          '&:hover': { filter: 'brightness(1.08)' },
           '&:active': { transform: 'translateY(1px)' },
           '&.Mui-focusVisible': {
             outline: '2px solid',

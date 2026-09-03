@@ -44,7 +44,6 @@ export const radius = { xs: 3, sm: 6, md: 10, lg: 14, xl: 20, pill: 999 } as con
 export const duration = { instant: 90, fast: 140, base: 220, slow: 380 } as const;
 export const easing = {
   out: 'cubic-bezier(0.16, 1, 0.3, 1)',
-  inOut: 'cubic-bezier(0.65, 0.35, 1)',
   easeInOut: 'cubic-bezier(0.4, 0, 0.2, 1)',
 } as const;
 

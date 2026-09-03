@@ -32,6 +32,16 @@ export interface DevicePalette {
   keycapLive: string;
   legend: string;
   legendMuted: string;
+  /**
+   * Positional accent colours some layouts paint onto specific keycaps —
+   * purely a visual grouping (see `key-cap.tsx`'s `keycapAccent`), unrelated
+   * to whether the key is bound. `white` needs its own legend colour: the
+   * app's usual light-on-dark `legend` text would be nearly invisible on it.
+   */
+  keycapGreen: string;
+  keycapOrange: string;
+  keycapWhite: string;
+  legendOnWhite: string;
 }
 
 const deviceDark: DevicePalette = {
@@ -45,6 +55,10 @@ const deviceDark: DevicePalette = {
   keycapLive: palette.accent.main,
   legend: '#E6EAF0',
   legendMuted: '#8B95A3',
+  keycapGreen: palette.success.dark,
+  keycapOrange: palette.warning.dark,
+  keycapWhite: palette.neutral[100],
+  legendOnWhite: palette.neutral[900],
 };
 
 export const fontStack = 'var(--font-sans), "Segoe UI", system-ui, -apple-system, sans-serif';
@@ -88,7 +102,7 @@ export const theme = createTheme({
       standard: duration.base,
       complex: duration.slow,
     },
-    easing: { easeOut: easing.out, easeInOut: easing.inOut },
+    easing: { easeOut: easing.out, easeInOut: easing.easeInOut },
   },
   typography: {
     fontFamily: fontStack,

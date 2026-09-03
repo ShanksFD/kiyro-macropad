@@ -4,7 +4,6 @@ import type { Route } from 'next';
 import NextLink from 'next/link';
 import { usePathname } from 'next/navigation';
 import Box from '@mui/material/Box';
-import Chip from '@mui/material/Chip';
 import Divider from '@mui/material/Divider';
 import List from '@mui/material/List';
 import ListItemButton from '@mui/material/ListItemButton';
@@ -148,7 +147,6 @@ export function Sidebar() {
       <Divider />
 
       <Stack direction="row" spacing={2} sx={{ alignItems: 'center', px: 5, py: 3 }}>
-        <Chip label="Preview" variant="outlined" size="small" />
         <Typography variant="caption" color="text.secondary">
           v0.1.0
         </Typography>

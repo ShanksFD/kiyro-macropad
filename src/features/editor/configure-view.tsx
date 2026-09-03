@@ -57,7 +57,7 @@ export function ConfigureView() {
     <Stack spacing={6}>
       <Stack
         direction={{ xs: 'column', md: 'row' }}
-        spacing={4}
+        spacing={0}
         sx={{ alignItems: { md: 'center' }, justifyContent: 'space-between' }}
       >
         <Stack spacing={1}>
