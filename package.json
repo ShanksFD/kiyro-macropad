@@ -1,6 +1,6 @@
 {
   "name": "kiyro",
-  "version": "0.1.9",
+  "version": "0.2.0",
   "private": true,
   "description": "Kiyro — macro pad configurator",
   "license": "MIT",
@@ -36,7 +36,9 @@
     "@mui/icons-material": "^9.4.0",
     "@mui/material": "^9.4.0",
     "@mui/material-nextjs": "^9.4.0",
+    "@sentry/electron": "^7.18.0",
     "@tabler/icons-react": "^3.46.0",
+    "electron-log": "^5.4.4",
     "electron-updater": "^6.8.9",
     "koffi": "^2.9.0",
     "next": "^16.3.3",
@@ -93,9 +95,8 @@
       ]
     },
     "nsis": {
-      "oneClick": false,
+      "oneClick": true,
       "perMachine": false,
-      "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "Kiyro",

@@ -54,7 +54,7 @@ export function ConfigureView() {
   };
 
   return (
-    <Stack spacing={6}>
+    <Stack spacing={3}>
       <Stack
         direction={{ xs: 'column', md: 'row' }}
         spacing={0}
@@ -107,7 +107,7 @@ export function ConfigureView() {
       </Stack>
 
       <Grid container spacing={4} sx={{ alignItems: 'flex-start' }}>
-        <Grid size={{ xs: 12, lg: 6 }}>
+        <Grid size={{ xs: 12, lg: 7, xl: 6 }}>
           <Stack spacing={4}>
             <MacroPadView
               device={device}
@@ -120,7 +120,7 @@ export function ConfigureView() {
           </Stack>
         </Grid>
 
-        <Grid size={{ xs: 12, lg: 6 }}>
+        <Grid size={{ xs: 12, lg: 5, xl: 6 }}>
           <ControlInspector device={device} />
         </Grid>
       </Grid>

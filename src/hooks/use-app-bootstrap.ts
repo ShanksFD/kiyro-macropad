@@ -15,6 +15,7 @@ import { useQuickActionsStore } from '@/stores/quick-actions-store';
 import { useUiStore } from '@/stores/ui-store';
 import { useDiscordStore } from '@/stores/discord-store';
 import { useUpdateStore } from '@/stores/update-store';
+import { initRendererObservability } from '@/lib/observability/sentry-renderer';
 import type { MacroProfile } from '@/lib/profiles/types';
 
 let wired = false;
@@ -90,6 +91,10 @@ export function useAppBootstrap(): void {
     console.log(`[kiyro][diag] mount effect running (wired=${wired}, window.kiyro present=${isElectron()})`);
     if (wired) return;
     wired = true;
+
+    // Before anything else that can throw, so a crash during the rest of
+    // this bootstrap is itself reportable.
+    initRendererObservability();
 
     initDeviceStore();
     useUiStore.getState().hydrate();

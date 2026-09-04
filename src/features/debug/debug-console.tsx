@@ -12,7 +12,13 @@ import Stack from '@mui/material/Stack';
 import Switch from '@mui/material/Switch';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
-import { CloseIcon, DeleteSweepIcon, NetworkPingIcon, PauseIcon, PlayArrowIcon } from '@/components/icons';
+import {
+  CloseIcon,
+  DeleteSweepIcon,
+  NetworkPingIcon,
+  PauseIcon,
+  PlayArrowIcon,
+} from '@/components/icons';
 import { describeEvent } from '@/lib/devices/registry';
 import { deviceSession } from '@/lib/serial/device-session';
 import { useDeviceStore } from '@/stores/device-store';

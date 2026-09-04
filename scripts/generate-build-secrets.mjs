@@ -49,6 +49,18 @@ const SECRETS = [
     file: 'discord-secret.ts',
     docs: 'README.md\'s "Discord integration" section',
   },
+  {
+    // Not actually a secret — a Sentry DSN is designed to be public and
+    // ships in every client SDK by definition (it only authorizes *writing*
+    // events to one project). It goes through this pipeline anyway because
+    // the shape is identical, and because it keeps "this build reports
+    // crashes" a property of the build environment rather than something
+    // committed once and impossible to turn off per-build.
+    env: 'KIYRO_SENTRY_DSN',
+    exportName: 'SENTRY_DSN',
+    file: 'sentry-dsn.ts',
+    docs: 'README.md\'s "Crash and error reporting" section',
+  },
 ];
 
 for (const { env, exportName, file, docs } of SECRETS) {

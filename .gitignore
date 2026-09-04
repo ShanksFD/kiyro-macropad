@@ -9,6 +9,7 @@ dist-installer
 # auto-updates" and "Discord integration" sections.
 electron/update-token.ts
 electron/discord-secret.ts
+electron/sentry-dsn.ts
 *.tsbuildinfo
 next-env.d.ts
 coverage

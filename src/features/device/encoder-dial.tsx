@@ -6,51 +6,36 @@ import ButtonBase from '@mui/material/ButtonBase';
 import Stack from '@mui/material/Stack';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
-import { RotateRightIcon, RotateLeftIcon, TouchAppIcon, TimerIcon, HelpOutlineIcon } from '@/components/icons';
+import {
+  RotateRightIcon,
+  RotateLeftIcon,
+  TouchAppIcon,
+  TimerIcon,
+  HelpOutlineIcon,
+} from '@/components/icons';
 import { describeAction } from '@/lib/actions/format';
 import type { Action, BindingMap } from '@/lib/actions/types';
 import type { ControlDescriptor, EncoderDescriptor } from '@/lib/devices/types';
+import { ActionIcon } from '@/features/editor/action-icon';
 import { useLiveInputStore } from '@/stores/live-input-store';
 import { duration, easing, radius } from '@/theme/tokens';
+import { theme } from '@/theme/theme';
+import { lighten, useMediaQuery } from '@mui/material';
 
-/**
- * Degrees of visual rotation per detent. An aesthetic choice, not a reading
- * of the hardware's actual detent count (which is not established — see
- * `EncoderNormalizer`'s own doc comment on `pulsesPerStep`): 30° reads as a
- * deliberate, felt step at one detent and as a smooth spin once several land
- * close together, without the knob completing a lap in an unrealistically
- * small number of clicks.
- */
+// Degrees of visual rotation per detent — aesthetic, not a reading of the
+// hardware's actual detent count (see `EncoderNormalizer`'s `pulsesPerStep`).
 const DEGREES_PER_STEP = 30;
 
 /**
  * A real spin while turning, not a capped nudge — every detent advances this
- * angle by `DEGREES_PER_STEP` in the turned direction, so a fast run of
- * pulses reads as an actual multi-step rotation rather than one small flick.
- * `rotate()` places no meaningful limit on the value, and the `transition` on
- * `transform` (`EncoderDial`, below) is what turns a run of discrete jumps
- * into a smooth spin when pulses land close together rather than a series of
- * visible snaps.
+ * angle by `DEGREES_PER_STEP` in the turned direction, unbounded, and it
+ * springs back to 0 the moment both pulses fade.
  *
- * It springs back to 0 as soon as pulses stop (see the `direction === null`
- * branch below) rather than staying at rest wherever it landed — the same
- * transition that makes the spin itself smooth also makes the return read as
- * a deliberate snap-back, not a jump cut.
- *
- * `cwAt`/`ccwAt` are the raw pulse timestamps from `live-input-store`'s
- * `active` map (not just a boolean): every new pulse — even a same-direction
- * one arriving while the previous pulse's highlight is still active —
- * overwrites that timestamp, which is what lets this tell individual detents
- * apart instead of seeing one contiguous "is turning" span.
- *
- * Deliberately not a `useEffect`, and deliberately not a ref either — this
- * project's lint rules (a React Compiler-oriented ruleset) forbid reading or
- * writing a ref during render, so "the last pulse seen" has to be ordinary
- * state like everything else here. This is React's own "adjust state when a
- * prop changes" pattern: comparing against a mirrored previous-value state
- * during render and calling `setState` right there rather than after a
- * commit, so it updates in the same render pass a new pulse arrives in,
- * instead of one tick behind an effect.
+ * Deliberately not a `useEffect`/ref — this project's lint rules (a React
+ * Compiler-oriented ruleset) forbid reading/writing a ref during render, so
+ * this uses React's "adjust state when a prop changes" pattern: comparing
+ * against a mirrored previous-value state during render and setting state
+ * right there, so it updates in the same render pass a new pulse arrives in.
  */
 function useEncoderAngle(cwAt: number | undefined, ccwAt: number | undefined): number {
   const [seen, setSeen] = useState({ cwAt, ccwAt });
@@ -71,7 +56,6 @@ function useEncoderAngle(cwAt: number | undefined, ccwAt: number | undefined): n
             : null;
 
     if (direction === null) {
-      // Both pulses have faded — spring back to the first position.
       setAngle(0);
     } else {
       setAngle(angle + (direction === 'cw' ? DEGREES_PER_STEP : -DEGREES_PER_STEP));
@@ -95,13 +79,7 @@ const ROW_ICONS = {
   long: <TimerIcon sx={{ fontSize: 16 }} />,
 };
 
-/**
- * A rotary encoder: the knob plus its four assignable gestures.
- *
- * The knob spins in the direction the hardware actually turned — a genuine,
- * unbounded rotation rather than a snap-back nudge, see `useEncoderAngle`
- * above — so a physical twist is confirmed visually without reading any text.
- */
+/** A rotary encoder: the knob plus its four assignable gestures. */
 export function EncoderDial({ encoder, bindings, selectedControlId, onSelect }: Props) {
   const active = useLiveInputStore((state) => state.active);
   const cwAt = active[encoder.clockwise.id];
@@ -122,28 +100,31 @@ export function EncoderDial({ encoder, bindings, selectedControlId, onSelect }: 
     <Stack
       direction="row"
       spacing={4}
-
       sx={{
         alignItems: 'center',
         p: 4,
         borderRadius: `${radius.lg}px`,
         border: '1px solid',
-        borderColor: 'device.keycapEdge',
+        borderColor: 'divider',
         bgcolor: 'device.keycap',
         minWidth: 0,
         flex: 1,
-        // Nothing should ever visually escape the rounded card — a squeezed
-        // row's trailing icon (below) used to spill past this corner at
-        // narrow widths instead of being clipped or wrapped.
+        // Keeps a squeezed row's trailing icon from spilling past the corner.
         overflow: 'hidden',
       }}
     >
       <Stack spacing={2} sx={{ alignItems: 'center', flexShrink: 0 }}>
-        <Box sx={{ position: 'relative', width: 104, height: 104, display: 'grid', placeItems: 'center' }}>
-          {/* The knob as a genuine light source, not just a bordered circle:
-              an outer bloom plus an inset glow on the same ring, both sides
-              of it lighting up together — turning intensifies both rather
-              than swapping in a different effect. */}
+        <Box
+          sx={{
+            position: 'relative',
+            width: 104,
+            height: 104,
+            display: 'grid',
+            placeItems: 'center',
+          }}
+        >
+          {/* The knob as a light source: an outer bloom plus an inset glow
+              on the same ring, both intensifying together while turning. */}
           <Box
             aria-hidden
             sx={{
@@ -152,24 +133,34 @@ export function EncoderDial({ encoder, bindings, selectedControlId, onSelect }: 
               borderRadius: '50%',
               border: '2px solid',
               borderColor: 'primary.main',
-              // `color-mix` (not a `-Channel` CSS var) makes the translucent
-              // bloom layer, since it works directly on the `var()` colour
-              // reference without depending on MUI's channel-variable naming.
               boxShadow: [
-                '0 0 10px var(--mui-palette-primary-main)',
-                '0 0 26px 4px color-mix(in srgb, var(--mui-palette-primary-main) 40%, transparent)',
+                '0 0 4px var(--mui-palette-primary-main)',
+                '0 0 16px 0px color-mix(in srgb, var(--mui-palette-primary-main) 40%, transparent)',
                 'inset 0 0 10px var(--mui-palette-primary-main)',
               ].join(', '),
-              opacity: 0.6,
+              opacity: 0.7,
               transition: 'opacity 240ms ease, box-shadow 240ms ease',
               ...((turningCw || turningCcw) && {
                 opacity: 1,
                 boxShadow: [
-                  '0 0 14px var(--mui-palette-primary-main)',
-                  '0 0 36px 8px color-mix(in srgb, var(--mui-palette-primary-main) 55%, transparent)',
-                  'inset 0 0 14px var(--mui-palette-primary-main)',
+                  '0 0 16px var(--mui-palette-primary-main)',
+                  '0 0 24px 8px color-mix(in srgb, var(--mui-palette-primary-main) 16%, transparent)',
+                  'inset 0 0 8px var(--mui-palette-primary-main)',
                 ].join(', '),
               }),
+            }}
+          />
+
+          {/* Outer housing — static; doesn't rotate with the knob. */}
+          <Box
+            aria-hidden
+            sx={{
+              position: 'absolute',
+              width: 76,
+              height: 76,
+              borderRadius: '50%',
+              bgcolor: '#282b34',
+              boxShadow: 'inset 0 3px 6px 2px rgba(0, 0, 0, 0.54), 0 1px 1px rgba(63, 69, 86, 1)',
             }}
           />
 
@@ -177,45 +168,28 @@ export function EncoderDial({ encoder, bindings, selectedControlId, onSelect }: 
             aria-hidden
             sx={(theme) => ({
               position: 'relative',
-              width: 76,
-              height: 76,
+              width: 66,
+              height: 66,
               borderRadius: '50%',
-              // Flat fill — the roundness reads entirely through the
-              // box-shadow layering below, same as the mockup. Picked by
-              // eye there against this app's actual dark background, so
-              // it's a literal value rather than an existing `device.*`
-              // token (none of those landed at the same shade).
-              background: '#262d37',
+              background: 'linear-gradient(180deg, #34373f 0%, #1d1f27 100%)',
               boxShadow: [
-                // soft light bouncing in from above the sphere, not on it
-                '0 -14px 18px -6px rgba(140, 150, 165, 0.5)',
-                // the sphere's own weight, cast down and out
-                '0 16px 28px -4px rgba(0, 0, 0, 0.6)',
-                // inner rim catching that same overhead light
-                'inset 0 5px 6px rgba(255, 255, 255, 0.25)',
-                // inner underside falling into shadow
-                'inset 0 -5px 8px rgba(0, 0, 0, 0.35)',
+                'inset 0 1px 3px 4px rgba(0, 0, 0, 0.09)',
+                'inset 0 1px 0 1px rgba(255, 255, 255, 0.11)',
+                'inset 0 -1px 0 1px rgba(23, 27, 36, 1)',
+                '0 8px 6px -2px rgba(0, 0, 0, 0.55)',
               ].join(', '),
               display: 'grid',
               placeItems: 'center',
               transform: `translateY(${pressed ? 2 : 0}px) rotate(${angleDeg}deg)`,
-              // Two different feels on purpose: each detent should read as an
-              // immediate, snappy response (short duration, so a fast run of
-              // them still blends into a smooth spin — see `useEncoderAngle`),
-              // but the spring-back once turning stops is a much bigger jump in
-              // one go (as much as 330°) and needs real time and a decelerating
-              // ease to read as an animated return rather than a teleport. At
-              // the old single 140ms duration it was technically animating but
-              // too fast to perceive as anything but a snap.
+              // Snappy per-detent response, but a slower decelerating
+              // spring-back once turning stops (see `useEncoderAngle`).
               transition: theme.transitions.create('transform', {
-                duration: turningCw || turningCcw ? theme.transitions.duration.shorter : duration.slow,
+                duration:
+                  turningCw || turningCcw ? theme.transitions.duration.shorter : duration.slow,
                 easing: turningCw || turningCcw ? theme.transitions.easing.easeInOut : easing.out,
               }),
             })}
           >
-            {/* Indicator dot — white with the ring's own blue glow, rather
-                than a neutral bar, so it reads as part of the same light
-                source as the ring instead of an unrelated marking. */}
             <Box
               sx={{
                 position: 'absolute',
@@ -223,8 +197,20 @@ export function EncoderDial({ encoder, bindings, selectedControlId, onSelect }: 
                 width: 6,
                 height: 6,
                 borderRadius: '50%',
-                bgcolor: '#fbfdff',
-                boxShadow: '0 0 10px var(--mui-palette-primary-main)',
+                bgcolor:
+                  turningCw || turningCcw
+                    ? lighten(theme.palette.primary.light, 0.3)
+                    : theme.palette.primary.light,
+                boxShadow:
+                  turningCw || turningCcw
+                    ? [
+                        '0 0 8px var(--mui-palette-primary-main)',
+                        '0 0 16px 2px color-mix(in srgb, var(--mui-palette-primary-main) 50%, transparent)',
+                      ].join(', ')
+                    : [
+                        '0 0 4px var(--mui-palette-primary-main)',
+                        '0 0 8px 2px color-mix(in srgb, var(--mui-palette-primary-main) 30%, transparent)',
+                      ].join(', '),
               }}
             />
           </Box>
@@ -266,6 +252,9 @@ function EncoderRow({
   const live = useLiveInputStore((state) => state.active[control.id] !== undefined);
   const label = describeAction(action ?? { type: 'none' });
   const assigned = action !== undefined && action.type !== 'none';
+  // A real breakpoint check, not a CSS-hidden element — the icon/text swap
+  // below `xl` should mean the other one never enters the DOM at all.
+  const isXlUp = useMediaQuery(theme.breakpoints.up('xl'));
 
   return (
     <Tooltip
@@ -282,10 +271,8 @@ function EncoderRow({
           alignItems: 'center',
           justifyContent: 'flex-start',
           width: '100%',
-          // Without this, the row refuses to shrink below its content's
-          // natural width once nested this deep in flex containers — the
-          // trailing help icon (below) then visually escapes the card's
-          // rounded corner at narrow widths instead of the text ellipsizing.
+          // Lets the row shrink below its content's natural width instead of
+          // the trailing icon spilling past the card's rounded corner.
           minWidth: 0,
           overflow: 'hidden',
           px: 2.5,
@@ -305,26 +292,49 @@ function EncoderRow({
       >
         <Box sx={{ display: 'flex', opacity: 0.7, flexShrink: 0 }}>{icon}</Box>
 
-        <Typography
-          component="span"
-          variant="caption"
-          sx={{ width: 44, flexShrink: 0, opacity: 0.7, fontWeight: 600 }}
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 2,
+            flex: 1,
+            minWidth: 0,
+          }}
         >
-          {control.shortLabel}
-        </Typography>
+          <Typography
+            component="span"
+            variant="caption"
+            sx={{ flexShrink: 0, opacity: 0.7, fontWeight: 600 }}
+          >
+            {control.shortLabel}
+          </Typography>
+          {!isXlUp && (
+            <Box sx={{ display: 'flex', opacity: assigned ? 1 : 0.45 }}>
+              {!assigned && control.confidence !== 'verified' ? (
+                <HelpOutlineIcon aria-hidden sx={{ fontSize: 14 }} />
+              ) : (
+                <ActionIcon type={action?.type ?? 'none'} sx={{ fontSize: 16 }} />
+              )}
+            </Box>
+          )}
 
-        <Typography
-          component="span"
-          variant="caption"
-          noWrap
-          sx={{ flex: 1, minWidth: 0, fontWeight: 600, opacity: assigned ? 1 : 0.45 }}
-        >
-          {assigned ? label.primary : 'Unassigned'}
-        </Typography>
-
-        {control.confidence !== 'verified' && (
-          <HelpOutlineIcon aria-hidden sx={{ fontSize: 14, opacity: 0.6, flexShrink: 0 }} />
-        )}
+          {isXlUp && (
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center', minWidth: 0 }}>
+              <Typography
+                component="span"
+                variant="caption"
+                noWrap
+                sx={{ minWidth: 0, fontWeight: 600, opacity: assigned ? 1 : 0.45 }}
+              >
+                {assigned ? label.primary : 'Unassigned'}
+              </Typography>
+              {control.confidence !== 'verified' && (
+                <HelpOutlineIcon aria-hidden sx={{ fontSize: 14, opacity: 0.6, flexShrink: 0 }} />
+              )}
+            </Stack>
+          )}
+        </Box>
       </ButtonBase>
     </Tooltip>
   );

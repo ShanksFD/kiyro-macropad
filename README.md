@@ -231,6 +231,7 @@ To cut a release:
 GH_TOKEN=<write-scoped token>              # your shell only, this session
 KIYRO_UPDATE_TOKEN=<read-only token>       # gets baked into the build
 KIYRO_DISCORD_CLIENT_SECRET=<see below>    # only if shipping the Discord integration too
+KIYRO_SENTRY_DSN=<see below>               # so failures on other people's machines reach you
 npm run dist:win:publish
 ```
 
@@ -272,6 +273,75 @@ auto-loads `.env` files the way `next dev`/`next build` do, which is why this
 needs its own step. For an actual release, pasting the tokens explicitly (as
 above) is arguably still the better habit — it means a stale or wrong secret
 can never silently sit loaded in a forgotten terminal.
+
+### When an update doesn't work
+
+Every step of the update flow writes to a log file on the machine that hit
+the problem, `electron-updater`'s own output included — that output names the
+reason an install failed and is the first thing to ask for:
+
+| | Log file |
+|---|---|
+| Windows | `%APPDATA%\Kiyro\logs\main.log` |
+| macOS | `~/Library/Logs/Kiyro/main.log` |
+
+Failures also report themselves to Sentry on their own (see **Crash and error
+reporting** below), which matters most for the install step specifically: the
+app is deliberately quitting at the moment things go wrong there, so there is
+no UI left to show an error in.
+
+The install step also leaves a marker (`userData/update-attempt.json`)
+recording which version it was handing off to. The next launch compares that
+against the version that actually came back, and reports an
+`Update install did not apply` problem if they differ — which is what catches
+an installer that got quarantined by antivirus, refused by SmartScreen, or
+unpacked somewhere the user's shortcut doesn't point at. All three look
+exactly like success from inside the app.
+
+**`nsis.oneClick` must stay `true`** while `electron/updater.ts` calls
+`quitAndInstall(true, true)`. The assisted installer (`oneClick: false`) does
+not reliably honour the relaunch flag, and in silent mode skips the directory
+page it was configured to show — so it can leave the app quit and never
+reopened, or install a second copy alongside the one the shortcut points at.
+Both present as "I clicked restart to update and nothing happened." Changing
+one of those two settings means changing the other.
+
+## Crash and error reporting
+
+Errors from both processes report to one Sentry project. The main process
+(`electron/observability.ts`) owns the client; the renderer
+(`src/lib/observability/sentry-renderer.ts`) forwards through it via
+`electron/preload.ts` rather than opening its own connection, so there is
+exactly one DSN and one place that decides whether reporting is on at all.
+
+Set `KIYRO_SENTRY_DSN` (Sentry → Settings → Projects → Kiyro → Client Keys)
+the same way as the other build-time values — `.env.local`, or explicitly in
+the shell that runs `dist:win:publish`. **Leave it unset and both halves
+disable themselves**, which is what a local dev build normally wants; a
+packaged build without it still writes the log file, just reports nothing.
+
+A DSN is not a secret in the way the other two values are — it only
+authorizes *writing* events to one project — but it goes through the same
+`scripts/generate-build-secrets.mjs` pipeline anyway so that "this build
+reports crashes" stays a property of the build rather than of the repo.
+
+Two things worth knowing before pointing this at anyone:
+
+- The baked update token and Discord client secret are **scrubbed** out of
+  every event and breadcrumb before it leaves the machine
+  (`observability.ts`'s `scrub`). An event that can't be serialized to check
+  is dropped rather than sent unchecked.
+- Absolute file paths are **not** scrubbed, and on Windows those contain the
+  account name (`C:\Users\<name>\...`). That's deliberate — it's most of what
+  makes an install-location bug diagnosable — but it does mean reports are
+  not anonymous.
+
+Reporting is off in development unless you ask for it, so a dev build's
+crashes never bury real reports from real installs:
+
+```powershell
+$env:KIYRO_SENTRY_DEV = "1"   # this terminal session only
+```
 
 ## Discord integration
 

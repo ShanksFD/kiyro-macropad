@@ -1,5 +1,7 @@
 'use client';
 
+import { useCallback, useEffect, useState } from 'react';
+
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -16,7 +18,7 @@ import { BrandDiscordIcon, ScienceIcon } from '@/components/icons';
 import { useKiyroBridge } from '@/hooks/use-kiyro-bridge';
 import { useDeviceStore } from '@/stores/device-store';
 import { useDiscordStore } from '@/stores/discord-store';
-import type { DiscordStatusPayload } from '@/lib/electron/ipc-types';
+import type { DiscordStatusPayload, StartupStatus } from '@/lib/electron/ipc-types';
 import { useUiStore } from '@/stores/ui-store';
 import type { Preferences } from '@/stores/ui-store';
 
@@ -78,6 +80,51 @@ export function SettingsView() {
   const status = useDeviceStore((state) => state.status);
 
   const kiyro = useKiyroBridge();
+
+  // Not a stored preference: the OS login item is the source of truth, since
+  // the user can also flip this in Task Manager (see `electron/startup.ts`).
+  // Re-read on focus so a change made over there shows up here instead of
+  // this toggle contradicting Windows.
+  const [startup, setStartup] = useState<StartupStatus | null>(null);
+  const [startupBusy, setStartupBusy] = useState(false);
+
+  // `kiyro?.startup`, not just `kiyro`: the preload bridge and this bundle are
+  // built separately, and `electron:dev` only compiles the preload once at
+  // launch while Next hot-reloads the renderer — so a renderer that knows
+  // about a new bridge method routinely runs against a preload that doesn't
+  // have it yet. Reaching straight through would take the whole Settings page
+  // down with a TypeError; this just leaves the control disabled instead.
+  const refreshStartup = useCallback(() => {
+    if (!kiyro?.startup) return;
+    void kiyro.startup
+      .get()
+      .then(setStartup)
+      // Same skew, one layer down: the handler may not be registered in a
+      // main process built before this channel existed, which rejects.
+      .catch(() => setStartup(null));
+  }, [kiyro]);
+
+  useEffect(() => {
+    refreshStartup();
+    window.addEventListener('focus', refreshStartup);
+    return () => window.removeEventListener('focus', refreshStartup);
+  }, [refreshStartup]);
+
+  const toggleStartup = async (enabled: boolean) => {
+    if (!kiyro?.startup) return;
+    setStartupBusy(true);
+    try {
+      // The main process replies with the status it read back from the OS
+      // afterwards, so a write that didn't take shows as off rather than
+      // leaving the switch stuck optimistically on.
+      setStartup(await kiyro.startup.set(enabled));
+    } catch {
+      notify('Could not change the startup setting.', 'error');
+    } finally {
+      setStartupBusy(false);
+    }
+  };
+
   const discordStatus = useDiscordStore((state) => state.status);
   const setDiscordStatus = useDiscordStore((state) => state.setStatus);
   const discordBusy = discordStatus.state === 'connecting' || discordStatus.state === 'authorizing';
@@ -95,7 +142,8 @@ export function SettingsView() {
     // genuine failure (a rejected token, a scope/permission problem) was
     // completely invisible: the chip just silently stayed "Not connected,"
     // indistinguishable from the button never having done anything.
-    else if (result.state === 'error') notify(`Could not connect to Discord: ${result.message}`, 'error');
+    else if (result.state === 'error')
+      notify(`Could not connect to Discord: ${result.message}`, 'error');
   };
 
   const disconnectDiscord = async () => {
@@ -156,6 +204,38 @@ export function SettingsView() {
             </TextField>
           </Section>
 
+          <Section title="Startup" description="Whether Kiyro runs automatically when you sign in.">
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={Boolean(startup?.enabled)}
+                  disabled={!startup?.supported || startupBusy}
+                  onChange={(_event, checked) => void toggleStartup(checked)}
+                />
+              }
+              label={
+                <Stack spacing={0.25}>
+                  <Typography variant="body2">Start Kiyro when I sign in (recommended)</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Launches straight to the tray, without opening a window. Your macro pad only
+                    works while Kiyro is running, so leaving this on means it keeps working after a
+                    restart without you having to open anything.
+                  </Typography>
+                </Stack>
+              }
+              sx={{ alignItems: 'flex-start', m: 0, gap: 2 }}
+            />
+
+            {startup?.blockedBySystem && (
+              <Alert severity="warning" variant="outlined">
+                Windows is blocking this. Kiyro is registered to start at sign-in, but it has been
+                switched off in Task Manager → Startup apps, so it won’t actually launch. Re-enable
+                it there — that setting overrides this one, and Kiyro deliberately doesn’t override
+                it back.
+              </Alert>
+            )}
+          </Section>
+
           <Section title="Device" description="How Kiyro connects to your macro pad.">
             {toggle(
               'autoReconnect',
@@ -180,8 +260,15 @@ export function SettingsView() {
                       : 'default'
                 }
                 variant={discordStatus.state === 'connected' ? 'filled' : 'outlined'}
+                sx={{
+                  borderWidth: 0,
+                }}
               />
-              <Button variant="outlined" disabled={discordBusy} onClick={() => void connectDiscord()}>
+              <Button
+                variant="outlined"
+                disabled={discordBusy}
+                onClick={() => void connectDiscord()}
+              >
                 {discordStatus.state === 'connected' ? 'Reconnect' : 'Connect to Discord'}
               </Button>
               {discordStatus.state === 'connected' && (
@@ -190,12 +277,6 @@ export function SettingsView() {
                 </Button>
               )}
             </Stack>
-            <Alert severity="info" variant="outlined">
-              A Discord action connects on its own the first time it’s pressed, even without doing
-              this here — this button is only for testing the connection ahead of time. The first
-              approval shows a one-time prompt inside Discord itself; nothing to do in a browser.
-              Requires Discord to be running.
-            </Alert>
           </Section>
 
           <Section title="Configuration" description="Editing and saving behaviour.">

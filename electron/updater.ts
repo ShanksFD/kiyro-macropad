@@ -36,17 +36,51 @@
  * be written into a configuration file (`package.json`'s `build.publish`) —
  * only ever set programmatically via `setFeedURL`, which is exactly what
  * this does.
+ *
+ * DIAGNOSING A FAILED UPDATE
+ * --------------------------
+ * Everything here logs to `observability.ts`'s file sink, which for a
+ * handed-out Windows build means `%APPDATA%\Kiyro\logs\main.log` on the
+ * machine that hit the problem — including `electron-updater`'s own output
+ * (`autoUpdater.logger` below), which is the only place the reason an
+ * install failed is ever stated. Ask for that file first. Real failures also
+ * reach Sentry on their own, which matters most for the install step, where
+ * the app is deliberately quitting at the exact moment things can go wrong
+ * and there is no UI left to report into.
  */
 
 import type { BrowserWindow } from 'electron';
 import { app } from 'electron';
 import { autoUpdater } from 'electron-updater';
+import { readFileSync, writeFileSync, rmSync } from 'node:fs';
+import path from 'node:path';
 import { IpcChannel } from '../src/lib/electron/ipc-types';
 import type { UpdaterStatusPayload } from '../src/lib/electron/ipc-types';
 import { UPDATE_FEED_TOKEN } from './update-token';
+import { captureError, captureProblem, flushReports, log } from './observability';
 
 /** Background re-check cadence — Kiyro is meant to keep running in the tray for long stretches between restarts, so launch alone isn't enough. Never triggers a download by itself. */
 const CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000;
+
+/**
+ * Written just before handing control to the installer, read on the next
+ * launch, deleted either way.
+ *
+ * This is the only way to find out that an install *silently didn't take*.
+ * `quitAndInstall` is close to unfalsifiable from inside this process:
+ * `electron-updater` considers the job done the moment the installer process
+ * has a pid, and this app is killed a tick later — so an installer that
+ * gets quarantined by antivirus, refused by SmartScreen, or unpacks into a
+ * different directory than the shortcut points at all look identical to
+ * success from here. Comparing the version we *hoped* to be running against
+ * the version we actually came back as is the check that catches every one
+ * of those.
+ */
+interface UpdateAttempt {
+  attemptedVersion: string;
+  fromVersion: string;
+  at: string;
+}
 
 export class AppUpdater {
   #ready = false;
@@ -57,16 +91,23 @@ export class AppUpdater {
   /** Wires up the feed and starts background checking. Safe to call unconditionally — no-ops in dev or when this build has no runtime token baked in, rather than failing loudly either way. */
   init(): void {
     if (!app.isPackaged) {
-      console.log('[kiyro] auto-update disabled: not a packaged build');
+      log.info('[kiyro] auto-update disabled: not a packaged build');
       return;
     }
 
+    this.#reportPreviousAttempt();
+
     if (UPDATE_FEED_TOKEN === '') {
-      console.warn(
+      log.warn(
         '[kiyro] auto-update disabled: this build has no KIYRO_UPDATE_TOKEN baked in (see README.md)',
       );
       return;
     }
+
+    // Routes electron-updater's own play-by-play into the log file. Without
+    // this it defaults to `console`, which in a packaged Windows build is
+    // attached to nothing at all — see this file's doc comment.
+    autoUpdater.logger = log;
 
     autoUpdater.setFeedURL({
       provider: 'github',
@@ -81,12 +122,33 @@ export class AppUpdater {
     // `quitAndInstall()` below.
     autoUpdater.autoDownload = false;
     autoUpdater.autoInstallOnAppQuit = false;
+    // Kiyro ships one full NSIS installer per release (`nsis` config in
+    // package.json), never a web installer. Saying so explicitly silences a
+    // warning electron-updater otherwise logs on every single download.
+    autoUpdater.disableWebInstaller = true;
 
-    autoUpdater.on('checking-for-update', () => this.#setStatus({ state: 'checking' }));
-    autoUpdater.on('update-available', (info) =>
-      this.#setStatus({ state: 'available', version: info.version }),
-    );
-    autoUpdater.on('update-not-available', () => this.#setStatus({ state: 'not-available' }));
+    autoUpdater.on('checking-for-update', () => {
+      // A background re-check must not walk back over a download the user
+      // already paid for — see `check()`, which won't even start one in
+      // those states. This only guards the event, in case a check is already
+      // in flight when a download finishes.
+      if (this.#status.state === 'downloading' || this.#status.state === 'downloaded') return;
+      this.#setStatus({ state: 'checking' });
+    });
+    autoUpdater.on('update-available', (info) => {
+      // Same reasoning: with `autoDownload` off, electron-updater re-emits
+      // `update-available` on *every* later check, including ones that
+      // happen long after the user already downloaded that exact version.
+      // Taking it at face value would flip a finished "Restart to update"
+      // button back to "Update 0.2.0" on its own every four hours and
+      // strand the staged installer.
+      if (this.#status.state === 'downloading' || this.#status.state === 'downloaded') return;
+      this.#setStatus({ state: 'available', version: info.version });
+    });
+    autoUpdater.on('update-not-available', () => {
+      if (this.#status.state === 'downloading' || this.#status.state === 'downloaded') return;
+      this.#setStatus({ state: 'not-available' });
+    });
     autoUpdater.on('download-progress', (progress) =>
       this.#setStatus({ state: 'downloading', percent: Math.round(progress.percent) }),
     );
@@ -94,18 +156,24 @@ export class AppUpdater {
       this.#setStatus({ state: 'downloaded', version: info.version }),
     );
     autoUpdater.on('error', (error) => {
-      console.error('[kiyro] auto-update error:', error);
+      captureError(error, { phase: 'updater', status: this.#status.state });
       this.#setStatus({ state: 'error', message: error.message });
     });
 
     this.#ready = true;
-    this.check();
-    setInterval(() => this.check(), CHECK_INTERVAL_MS);
+    void this.check();
+    setInterval(() => void this.check(), CHECK_INTERVAL_MS);
   }
 
   /** Read-only: asks GitHub what the latest release is. Never downloads anything by itself. Returns the resulting status so a caller (the Help menu's "Check for Updates…") can show its own immediate feedback instead of racing the broadcast channel. */
   async check(): Promise<UpdaterStatusPayload> {
     if (!this.#ready) return this.#status;
+
+    // Nothing a check can discover is more useful than an update that's
+    // already downloaded and waiting for the user to click restart.
+    if (this.#status.state === 'downloading' || this.#status.state === 'downloaded') {
+      return this.#status;
+    }
 
     try {
       await autoUpdater.checkForUpdates();
@@ -113,7 +181,11 @@ export class AppUpdater {
       // Already turned into an `error` status by the `'error'` listener
       // above in the normal case; this only catches a check that failed
       // before electron-updater got far enough to emit that event at all.
-      console.error('[kiyro] checkForUpdates failed:', error);
+      captureError(error, { phase: 'checkForUpdates' });
+      this.#setStatus({
+        state: 'error',
+        message: error instanceof Error ? error.message : 'Update check failed',
+      });
     }
 
     return this.#status;
@@ -121,12 +193,24 @@ export class AppUpdater {
 
   /** Explicit, user-initiated download of whatever `check()` last found available. */
   async download(): Promise<void> {
-    if (!this.#ready || this.#status.state !== 'available') return;
+    if (!this.#ready) {
+      this.#fail('Updates are not available in this build.', { action: 'download' });
+      return;
+    }
+    if (this.#status.state !== 'available') {
+      // Never return silently: a click that produces no state change and no
+      // message is indistinguishable from a broken button, which is the
+      // exact failure mode this whole feature keeps running into.
+      this.#fail(`Nothing to download (update state: ${this.#status.state}).`, {
+        action: 'download',
+      });
+      return;
+    }
 
     try {
       await autoUpdater.downloadUpdate();
     } catch (error) {
-      console.error('[kiyro] downloadUpdate failed:', error);
+      captureError(error, { phase: 'downloadUpdate' });
       this.#setStatus({
         state: 'error',
         message: error instanceof Error ? error.message : 'Download failed',
@@ -141,17 +225,108 @@ export class AppUpdater {
    *
    * `quitAndInstall(true, true)`, not the zero-arg call: electron-updater's
    * default is `isSilent: false`, which runs the NSIS installer *without*
-   * the `/S` silent flag — a full, visible setup wizard (license screen,
-   * directory picker, Next/Install buttons) pops up out of nowhere right
-   * after someone clicked what looked like a one-click "restart to update"
-   * button. That reads as broken, not as an update in progress, and is easy
-   * to accidentally cancel. `true, true` runs it silently and relaunches
-   * Kiyro on its own once done — no dialog, no click-through, matching what
-   * the button actually promised.
+   * the `/S` silent flag — a full, visible setup wizard pops up out of
+   * nowhere right after someone clicked what looked like a one-click
+   * "restart to update" button. That reads as broken, not as an update in
+   * progress, and is easy to accidentally cancel. `true, true` runs it
+   * silently and relaunches Kiyro on its own once done.
+   *
+   * That pairing is only sound because `nsis.oneClick` is `true`
+   * (package.json). The *assisted* installer (`oneClick: false`) does not
+   * reliably honour `--force-run`, and in `/S` mode skips the directory page
+   * it was configured to show — so silent-installing one could leave the app
+   * quit and never relaunched, or unpacked somewhere the existing shortcut
+   * doesn't point at. Both look exactly like "I clicked restart to update
+   * and nothing happened." Do not set `oneClick: false` again without also
+   * changing this call back to `quitAndInstall(false, true)`.
    */
-  quitAndInstall(): void {
-    if (this.#status.state !== 'downloaded') return;
+  async quitAndInstall(): Promise<void> {
+    if (this.#status.state !== 'downloaded') {
+      this.#fail(`No downloaded update to install (update state: ${this.#status.state}).`, {
+        action: 'quitAndInstall',
+      });
+      return;
+    }
+
+    const attemptedVersion = this.#status.version;
+    log.info(`[kiyro] installing update ${app.getVersion()} -> ${attemptedVersion}`);
+    this.#recordAttempt(attemptedVersion);
+
+    // This process is killed within a tick of `quitAndInstall`, and Sentry
+    // delivery is fire-and-forget over the network — anything queued from
+    // this session (very much including the reason a *previous* install
+    // failed) would go with it otherwise.
+    await flushReports();
+
     autoUpdater.quitAndInstall(true, true);
+  }
+
+  /** Path of the marker written before an install attempt — `userData`, same place profiles and preferences live. */
+  #attemptFilePath(): string {
+    return path.join(app.getPath('userData'), 'update-attempt.json');
+  }
+
+  #recordAttempt(attemptedVersion: string): void {
+    const attempt: UpdateAttempt = {
+      attemptedVersion,
+      fromVersion: app.getVersion(),
+      at: new Date().toISOString(),
+    };
+    try {
+      // Synchronous on purpose: the installer is spawned and this process
+      // quits immediately after, with no event loop turn to spare for a
+      // promise to settle in.
+      writeFileSync(this.#attemptFilePath(), JSON.stringify(attempt), 'utf-8');
+    } catch (error) {
+      // Losing the marker costs a diagnostic, not the update itself.
+      captureError(error, { phase: 'recordUpdateAttempt', attemptedVersion });
+    }
+  }
+
+  /**
+   * Runs once per launch: did the install we handed off last time actually
+   * happen? Reports it if not — this is the check that turns "it just didn't
+   * work for him" into a specific version pair and a timestamp.
+   */
+  #reportPreviousAttempt(): void {
+    const file = this.#attemptFilePath();
+
+    let attempt: UpdateAttempt;
+    try {
+      attempt = JSON.parse(readFileSync(file, 'utf-8')) as UpdateAttempt;
+    } catch {
+      // No marker (the overwhelmingly common case) or an unreadable one —
+      // nothing to conclude either way.
+      return;
+    }
+
+    try {
+      rmSync(file, { force: true });
+    } catch {
+      // Worst case it's re-reported next launch; not worth failing over.
+    }
+
+    const currentVersion = app.getVersion();
+    if (currentVersion === attempt.attemptedVersion) {
+      log.info(
+        `[kiyro] update installed successfully: ${attempt.fromVersion} -> ${currentVersion}`,
+      );
+      return;
+    }
+
+    captureProblem('Update install did not apply', {
+      attemptedVersion: attempt.attemptedVersion,
+      fromVersion: attempt.fromVersion,
+      runningVersion: currentVersion,
+      attemptedAt: attempt.at,
+      execPath: process.execPath,
+    });
+  }
+
+  /** Report a refusal the same way a thrown error is reported — logged, sent, and pushed to the UI so the chip can say so. */
+  #fail(message: string, context: Record<string, unknown>): void {
+    captureProblem(`Updater: ${message}`, { ...context, status: this.#status.state });
+    this.#setStatus({ state: 'error', message });
   }
 
   #setStatus(status: UpdaterStatusPayload): void {

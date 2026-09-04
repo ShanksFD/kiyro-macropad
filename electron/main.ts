@@ -36,7 +36,24 @@
  * first instance to show its window instead.
  */
 
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, net, protocol } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, net, protocol, session } from 'electron';
+// First import with a side effect, and deliberately so: this installs the
+// log file and the crash reporter before any other module gets a chance to
+// throw. Anything that fails during startup below is only diagnosable on
+// someone else's machine because this ran first.
+import { captureError, initObservability, log } from './observability';
+
+// Electron's own DevTools-console security warnings flag `'unsafe-eval'` in
+// a page's CSP unconditionally — which the dev-mode `Content-Security-Policy`
+// header below has to include, because Next's dev server (Turbopack's
+// HMR/module runtime) genuinely uses `eval()` to run modules. There is no
+// CSP wording that satisfies this specific check while keeping hot reload
+// working; the warning's own last line ("will not show up once the app is
+// packaged") is correct, because the *packaged* CSP has no `unsafe-eval` at
+// all — see the policy split further down. Suppressed only in dev, and only
+// because it's unavoidable noise here rather than a real gap: it stays on
+// in a packaged build, so an actual regression there still surfaces.
+if (!app.isPackaged) process.env['ELECTRON_DISABLE_SECURITY_WARNINGS'] = 'true';
 import type { Tray } from 'electron';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -46,6 +63,12 @@ import { ExecutionPipeline } from './execution-pipeline';
 import { registerIpcHandlers } from './ipc-handlers';
 import { discordRpcClient } from './discord-rpc';
 import { AppUpdater } from './updater';
+import {
+  applyFirstRunStartupDefault,
+  getStartupStatus,
+  reconcileStartupPath,
+  setStartupEnabled,
+} from './startup';
 import { listInstalledBrowsers } from './win-browsers';
 import * as keyboardCapture from './win-keyboard-hook';
 import { IpcChannel } from '../src/lib/electron/ipc-types';
@@ -117,7 +140,15 @@ function resolveOutPath(pathname: string): string {
   return lastSegment.includes('.') ? trimmed : `${trimmed}.html`;
 }
 
-/** Passed by a launcher (e.g. a "start with Windows" login item) that wants Kiyro running without the GUI popping up. */
+/**
+ * Set by the login item `electron/startup.ts` registers, which always passes
+ * `--hidden`: someone signing in wants the macro pad working, not a window
+ * stealing focus. The window is still *created* either way — the renderer is
+ * what pushes the active profile's bindings down to the execution pipeline
+ * (`use-app-bootstrap.ts` → `IpcChannel.SetActiveProfile`), so a build that
+ * skipped creating it at login would start with no bindings loaded and every
+ * key press doing nothing. Only `show()` is skipped.
+ */
 const START_HIDDEN = process.argv.includes('--hidden');
 
 let mainWindow: BrowserWindow | null = null;
@@ -134,12 +165,12 @@ async function loadDevServer(window: BrowserWindow): Promise<void> {
       return;
     } catch {
       if (attempt === 0) {
-        console.log(`[kiyro] waiting for ${DEV_SERVER_URL} (run "next dev" alongside this)...`);
+        log.info(`[kiyro] waiting for ${DEV_SERVER_URL} (run "next dev" alongside this)...`);
       }
       await new Promise((resolve) => setTimeout(resolve, 500));
     }
   }
-  console.error(`[kiyro] could not reach ${DEV_SERVER_URL} after ${maxAttempts} attempts`);
+  log.error(`[kiyro] could not reach ${DEV_SERVER_URL} after ${maxAttempts} attempts`);
 }
 
 function showWindow(): void {
@@ -199,6 +230,21 @@ async function createWindow(): Promise<void> {
     if (!START_HIDDEN) window.show();
   });
 
+  // F12, independent of the in-page `WindowMenu`'s "Toggle Developer
+  // Tools" item. Electron only wires the Ctrl+Shift+I/F12 accelerator
+  // through a native application menu, and this app runs with
+  // `Menu.setApplicationMenu(null)` on Windows/Linux (see below) — so
+  // without this, DevTools access has exactly one path in, through a
+  // single React component. If that component fails to render for any
+  // reason, DevTools becomes unreachable at the exact moment it's needed
+  // most. Bound directly on `webContents`, upstream of React entirely, so
+  // it works even if the renderer never finishes loading.
+  window.webContents.on('before-input-event', (_event, input) => {
+    if (input.type === 'keyDown' && input.key === 'F12') {
+      window.webContents.toggleDevTools();
+    }
+  });
+
   // The `X` button hides the window instead of destroying it — the serial
   // connection and execution pipeline live in this process, not the window,
   // and must keep running. Only an actual quit (`isQuitting`, set by the
@@ -231,7 +277,7 @@ async function createWindow(): Promise<void> {
   window.webContents.on('did-finish-load', () => {
     window.webContents.setZoomFactor(1);
     window.webContents.setVisualZoomLevelLimits(1, 1).catch(() => undefined);
-    console.log('[kiyro][diag] did-finish-load fired');
+    log.info('[kiyro] did-finish-load');
   });
 
   if (app.isPackaged) {
@@ -243,6 +289,27 @@ async function createWindow(): Promise<void> {
     await loadDevServer(window);
   }
 }
+
+initObservability();
+
+// A throw that escapes to here would previously kill the app with no trace
+// anywhere on the user's machine. These do not *handle* anything — they
+// exist so the failure is recorded before the process goes down.
+process.on('uncaughtException', (error) => {
+  captureError(error, { phase: 'uncaughtException' });
+});
+process.on('unhandledRejection', (reason) => {
+  captureError(reason, { phase: 'unhandledRejection' });
+});
+
+// A renderer that dies takes the whole UI with it and leaves the tray icon
+// sitting there looking fine — worth knowing about without being told.
+app.on('render-process-gone', (_event, _webContents, details) => {
+  captureError(new Error(`Renderer process gone: ${details.reason}`), {
+    phase: 'render-process-gone',
+    exitCode: details.exitCode,
+  });
+});
 
 // Must run before anything touches the serial port. If another instance
 // already holds the lock, this call returns false and we quit immediately —
@@ -268,6 +335,37 @@ if (!gotSingleInstanceLock) {
       const dockIcon = nativeImage.createFromPath(path.join(ASSETS_DIR, 'icon.icns'));
       if (!dockIcon.isEmpty()) app.dock?.setIcon(dockIcon);
     }
+
+    // Silences Electron's own "Insecure Content-Security-Policy" console
+    // warning by actually setting one, rather than the warning's own advice
+    // ("this will not show up once the app is packaged") — that line is
+    // true, but only because Electron stops *checking* in production, not
+    // because a packaged build has a policy either. Applied at the session
+    // level so it covers every response: both `http://localhost:3000` in
+    // dev and the `app://` custom protocol in a packaged build — responses
+    // from `protocol.handle` below still pass through `webRequest` the same
+    // way ordinary network responses do, since Electron 20's protocol
+    // overhaul routes custom protocols through the same network stack.
+    //
+    // MUI/Emotion inject `<style>` tags at runtime (CSS-in-JS, no nonce
+    // wiring in this app), hence `style-src 'unsafe-inline'` in both modes —
+    // that one isn't a dev-only allowance. `script-src` is the one that
+    // actually differs: only Next's dev server (Turbopack's HMR/module
+    // runtime) needs `unsafe-eval`, and only dev needs `connect-src` to
+    // reach `localhost:3000` itself for the HMR websocket. A packaged build
+    // loads everything from `app://` and needs neither.
+    const CONTENT_SECURITY_POLICY = app.isPackaged
+      ? "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'"
+      : "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' ws://localhost:3000 http://localhost:3000; object-src 'none'; base-uri 'self'";
+
+    session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+      callback({
+        responseHeaders: {
+          ...details.responseHeaders,
+          'Content-Security-Policy': [CONTENT_SECURITY_POLICY],
+        },
+      });
+    });
 
     // Only ever hit for a packaged build (`app://kiyro/...`, per `loadURL`
     // above) — dev mode loads `http://localhost:3000` directly and never
@@ -320,6 +418,23 @@ if (!gotSingleInstanceLock) {
 
     ipcMain.handle(IpcChannel.AppsListBrowsers, () => listInstalledBrowsers());
 
+    // "Start when I sign in" — backed by the OS login item, never by a
+    // stored preference (see `startup.ts` for why).
+    ipcMain.handle(IpcChannel.StartupGet, () => getStartupStatus());
+    ipcMain.handle(IpcChannel.StartupSet, (_event, enabled: boolean) =>
+      setStartupEnabled(enabled),
+    );
+
+    // On by default, once, on a fresh install — the pad does nothing
+    // unless Kiyro is running. Never re-applied after that, so turning it
+    // off in Settings or Task Manager stays off.
+    applyFirstRunStartupDefault();
+
+    // An update can install into a different directory and leave the
+    // login item pointing at an executable that no longer exists — the
+    // user only finds out at their next sign-in, when nothing starts.
+    reconcileStartupPath();
+
     // Exclusive keyboard capture for the shortcut recorder. Every update is
     // sent with `setImmediate` because these originate *inside* a low-level
     // keyboard hook callback, which Windows discards entirely if it runs
@@ -371,7 +486,7 @@ if (!gotSingleInstanceLock) {
         else void createWindow();
       },
       onQuit: () => {
-        console.log('[kiyro] quitting (tray)');
+        log.info('[kiyro] quitting (tray)');
         isQuitting = true;
         app.quit();
       },

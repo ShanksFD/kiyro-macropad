@@ -48,10 +48,26 @@ export const IpcChannel = {
   UpdaterDownload: 'kiyro:updater:download',
   UpdaterQuitAndInstall: 'kiyro:updater:quit-and-install',
   UpdaterStatus: 'kiyro:updater:status',
+  StartupGet: 'kiyro:startup:get',
+  StartupSet: 'kiyro:startup:set',
   DiscordConnect: 'kiyro:discord:connect',
   DiscordDisconnect: 'kiyro:discord:disconnect',
   DiscordStatus: 'kiyro:discord:status',
 } as const;
+
+/**
+ * Whether Kiyro launches itself when the user signs in — see
+ * `electron/startup.ts`. Read back from the OS on every query rather than
+ * mirrored into `preferences.json`, because the user can also flip this in
+ * Task Manager and a stored copy would drift out of sync with reality.
+ */
+export interface StartupStatus {
+  /** `false` in dev builds and on platforms without a login item; the UI hides the control rather than offering a switch that does nothing. */
+  supported: boolean;
+  enabled: boolean;
+  /** Windows only: registered, but switched off in Task Manager → Startup apps, so it will not actually launch. */
+  blockedBySystem: boolean;
+}
 
 /** One browser found in the registry — see `electron/win-browsers.ts`. */
 export interface InstalledBrowser {
@@ -222,6 +238,16 @@ export interface KiyroBridge {
     /** Quits Kiyro, installs, relaunches. Only meaningful once `onStatus` has reported `'downloaded'`. */
     quitAndInstall(): Promise<void>;
     onStatus(callback: (payload: UpdaterStatusPayload) => void): () => void;
+  };
+  /**
+   * "Start when I sign in" (`electron/startup.ts`). Backed by the OS login
+   * item itself, not a stored preference — `get()` re-reads it every time so
+   * a change made in Task Manager is reflected here rather than contradicted.
+   */
+  startup: {
+    get(): Promise<StartupStatus>;
+    /** Resolves with the resulting status, re-read from the OS, so the caller never has to assume the write took. */
+    set(enabled: boolean): Promise<StartupStatus>;
   };
   /**
    * Discord voice control (`electron/discord-rpc.ts`) — mute/deafen/mic

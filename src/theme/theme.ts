@@ -1,6 +1,6 @@
 'use client';
 
-import { alpha, createTheme, darken, type Theme } from '@mui/material/styles';
+import { createTheme, darken, type Theme } from '@mui/material/styles';
 import { duration, easing, palette, radius } from './tokens';
 
 /**
@@ -41,6 +41,9 @@ export interface DevicePalette {
   keycapGreen: string;
   keycapOrange: string;
   keycapWhite: string;
+  keycapPressedGreen: string;
+  keycapPressedOrange: string;
+  keycapPressedWhite: string;
   legendOnWhite: string;
 }
 
@@ -67,7 +70,10 @@ export const deviceDark: DevicePalette = {
   legendMuted: '#8B95A3',
   keycapGreen: palette.success.dark,
   keycapOrange: palette.warning.dark,
-  keycapWhite: palette.neutral[100],
+  keycapPressedGreen: darken(palette.success.dark, 0.2),
+  keycapPressedOrange: darken(palette.warning.dark, 0.2),
+  keycapPressedWhite: darken(palette.neutral[100], 0.2),
+  keycapWhite: palette.neutral[200],
   legendOnWhite: palette.neutral[900],
 };
 
@@ -403,7 +409,69 @@ export const theme = createTheme({
       },
     },
     MuiMenuItem: { styleOverrides: { root: { fontSize: '0.8125rem', minHeight: 34 } } },
-    MuiSwitch: { defaultProps: { size: 'small' } },
+    /**
+     * iOS-style switch, applied here rather than as a `styled(Switch)`
+     * component so every `<Switch>` already in the app picks it up without
+     * touching a single call site.
+     *
+     * Adapted from MUI's own `IOSSwitch` demo, minus two things that don't
+     * apply here: its `theme.applyStyles('dark', ...)` branches are folded
+     * into the base styles (Kiyro is dark-only — see this file's top), and
+     * its hardcoded greens are replaced with `primary.main`.
+     *
+     * `size: 'small'` is deliberately gone: the geometry below is fixed at
+     * the iOS 42×26, and leaving the default prop on would have MUI's own
+     * `sizeSmall` rules fighting these for the same properties.
+     */
+    MuiSwitch: {
+      defaultProps: { disableRipple: true },
+      styleOverrides: {
+        root: {
+          width: 36,
+          height: 22,
+          padding: 0,
+        },
+        switchBase: ({ theme: t }) => ({
+          padding: 0,
+          margin: 2,
+          transitionDuration: `${duration.base}ms`,
+          '&.Mui-checked': {
+            transform: 'translateX(14px)',
+            color: '#fff',
+            '& + .MuiSwitch-track': {
+              backgroundColor: vars(t).palette.primary.main,
+              opacity: 1,
+              border: 0,
+            },
+            '&.Mui-disabled + .MuiSwitch-track': { opacity: 0.5 },
+          },
+          // The ring the demo draws with a white border would disappear
+          // against a dark track, so focus is a real outline instead —
+          // matching how focus is signalled everywhere else in this app.
+          '&.Mui-focusVisible .MuiSwitch-thumb': {
+            outline: `2px solid ${vars(t).palette.primary.light}`,
+            outlineOffset: 2,
+          },
+          '&.Mui-disabled .MuiSwitch-thumb': {
+            color: palette.neutral[400],
+          },
+          '&.Mui-disabled + .MuiSwitch-track': { opacity: 0.3 },
+        }),
+        thumb: {
+          boxSizing: 'border-box',
+          width: 18,
+          height: 18,
+        },
+        track: ({ theme: t }) => ({
+          borderRadius: 11,
+          backgroundColor: palette.neutral[600],
+          opacity: 1,
+          transition: t.transitions.create(['background-color'], {
+            duration: duration.slow,
+          }),
+        }),
+      },
+    },
     MuiSnackbar: { defaultProps: { anchorOrigin: { vertical: 'bottom', horizontal: 'right' } } },
   },
 });

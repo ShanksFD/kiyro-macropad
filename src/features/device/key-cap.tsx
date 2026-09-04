@@ -49,6 +49,12 @@ const ACCENT_BG: Record<KeycapAccent, string> = {
   white: 'device.keycapWhite',
 };
 
+const PRESSED_BG: Record<KeycapAccent, string> = {
+  green: 'device.keycapPressedGreen',
+  orange: 'device.keycapPressedOrange',
+  white: 'device.keycapPressedWhite',
+};
+
 /** Same three accents, keyed for direct `theme.palette.device` lookups —
  * needed alongside `ACCENT_BG`'s dot-path strings because the wall/highlight
  * shadows below are computed colours (`darken`/`alpha`), not values MUI's sx
@@ -130,7 +136,7 @@ export function KeyCap({ button, action, selected, showEventCode, onSelect }: Pr
             // vs `keycap`). That distinction still reads through the label
             // text ("Unassigned" at reduced opacity) and the action icon,
             // just not through this background any more.
-            bgcolor: ACCENT_BG[accent],
+            bgcolor: selected ? PRESSED_BG[accent] : ACCENT_BG[accent],
             color: accent === 'white' ? 'device.legendOnWhite' : 'device.legend',
             border: 'none',
             boxShadow: restingShadow,
@@ -213,15 +219,15 @@ export function KeyCap({ button, action, selected, showEventCode, onSelect }: Pr
             <Typography
               component="span"
               sx={{
-                fontSize: '0.8125rem',
-                fontWeight: 620,
+                fontSize: '0.75rem',
+                fontWeight: '500',
                 lineHeight: 1.2,
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 display: '-webkit-box',
                 WebkitLineClamp: 2,
                 WebkitBoxOrient: 'vertical',
-                opacity: assigned ? 1 : 0.6,
+                opacity: assigned ? 1 : 0.75,
               }}
             >
               {assigned ? label.primary : 'Unassigned'}

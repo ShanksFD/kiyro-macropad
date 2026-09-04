@@ -2,91 +2,156 @@
 
 ## 1. Objective
 
-Converting the "Kiyro" macro pad configurator (Next.js/MUI web app) into a cross-platform Electron desktop app, so the Electron main process owns serial I/O and does native OS-level key injection (Windows `SendInput`), replacing the old separate Python "Kiyro Host" process. Hardware: ESP32-C3 12-key macro pad + 2 rotary encoders, VID 0x303A / PID 0x1001.
-
-The Electron conversion itself (per the original approved plan at `C:\Users\anass\.claude\plans\imperative-humming-cerf.md`) is functionally complete. The session's current focus shifted to **debugging why the macro pad can no longer connect at all** — a hardware/OS-level serial-port failure unrelated to the Electron work.
+Give the "Kiyro" macro pad configurator's hardware-preview visuals (encoder
+knobs and keycaps in `src/features/device/`) a genuine 3D, physical-device
+look — depth, lighting, and press feedback that reads as real hardware
+rather than flat MUI cards. Work was driven iteratively against a standalone
+HTML mockup rather than designed blind in the real components.
 
 ## 2. Current state
 
-**Electron conversion — done:**
-- Main/preload/IPC architecture, native `SendInput` via `koffi`, Electron `userData` profile + preferences persistence, trimmed custom menu, zoom-reset fix — all implemented and live-verified earlier in this session (before the current handoff point).
-- **Background/tray mode** — fully implemented this session: `electron/tray.ts` (new), `electron/main.ts` rewritten for hide-on-close + tray + `--hidden` launch flag, `electron/serial-bridge.ts` `stop()` now logs port release. Also added `app.requestSingleInstanceLock()` to `main.ts` after discovering multiple Electron instances were fighting over COM3 (see §4).
-- None of this tray/single-instance work has been build/lint/test-verified — user's standing instruction throughout has been "no tests or builds needed," so this is intentionally unverified beyond manual code read-through.
+**Mockup (source of truth for the visual design), fully iterated and
+approved by the user:**
+`C:\Users\anass\AppData\Local\Temp\claude\c--Users-anass-Desktop-Files-Work-Kiyro-kiyro-macropad\5ba01e27-4cc0-465c-9412-4a4363caaaa5\scratchpad\kiyro-3d-preview.html`
+This is a **scratchpad temp file** — not part of the repo, not durable
+across machines/sessions. If it's gone, its finished state is fully
+transcribed into code already (see below); nothing further depends on the
+file itself surviving.
 
-**In progress / blocking everything else — a hardware connection failure:**
-The macro pad stopped connecting entirely. Every attempt to open COM3 fails with:
-```
-Error: Open (SetCommState): Unknown error code 31   (Windows ERROR_GEN_FAILURE)
-```
-This has been chased down an extensive elimination chain (see §4) and is **currently unresolved**. This is the live blocker — nothing else in the app can be verified against real hardware until COM3 opens again.
+**Applied to the real app, both done and matching the mockup as of this
+handoff:**
+- **`src/features/device/encoder-dial.tsx`** — the knob previously had *no*
+  glow at all (a plain bordered circle). Rebuilt to match the mockup:
+  - `104×104` stage wrapping the `76×76` face, with an absolutely-positioned
+    glow ring behind it (`2px solid primary.main` border + outer bloom +
+    inset glow box-shadow), opacity `0.6` at rest → `1` + stronger shadow
+    while `turningCw || turningCcw`.
+  - Translucent bloom layer uses CSS `color-mix(in srgb, var(--mui-palette-primary-main) N%, transparent)` — **not** MUI's `-Channel` CSS-var
+    convention (`--mui-palette-primary-mainChannel`), because that couldn't
+    be confirmed to exist in this MUI version/config. `color-mix` works
+    directly off the `var()` reference regardless, so it sidesteps the
+    question entirely.
+  - Face fill is a literal `#262d37` (picked by eye in the mockup against
+    this app's actual background — no existing `device.*` token landed on
+    the same shade), with the mockup's four-layer box-shadow (overhead
+    light, weight shadow, inner rim highlight, inner underside shadow).
+  - Indicator notch changed from a plain bar to a small white dot with a
+    `primary.main`-tinted glow, so it reads as part of the same light
+    source as the ring.
+  - Removed: the decorative dashed inner ring, and the old
+    bgcolor-swap-to-`device.keycapLive` on turning — neither exists in the
+    mockup, where only the outer ring communicates turning state.
+- **`src/features/device/key-cap.tsx`** — reworked to a "chiclet cap" look:
+  rounder corners, a hard-edged inset top highlight, a solid-colour "wall"
+  offset underneath (both derived per-accent via `darken`/`alpha` off
+  `deviceDark[...]` — see the CSS-vars gotcha below), no ring on
+  `selected` (now reuses the pressed/settled posture + a brightness lift
+  instead of lift+scale+shadow-ring), no glow bloom on live/click (press
+  motion only), and a faster/flatter transition (was springy + felt
+  "laggy").
+  **Note:** `borderRadius` in this file changed on disk mid-session outside
+  of my own edits (`radius.xl` → back to `radius.lg`) — treated as a
+  deliberate user edit and left alone, not reverted. Worth eyeballing
+  whether that was intentional vs. a stray revert.
+- **`src/theme/theme.ts`** — exported `deviceDark` (was module-private).
+  Needed because with `cssVariables: true`, `theme.palette.device.*` (and
+  `vars(theme).palette.device.*` — same thing) resolves to a
+  `var(--mui-palette-device-*)` **string** at runtime, not a literal hex —
+  fine for CSS properties MUI resolves directly, but `darken()`/`alpha()`
+  from `@mui/material/styles` can't parse a `var()` reference and throw.
+  `deviceDark` holds the literal values `colorSchemes.dark` is built from,
+  so it's the correct escape hatch for "I need to compute a *new* color
+  from a device token." **Only safe because this app currently defines a
+  single (dark) color scheme** — if a light scheme is ever added, every
+  call site reading `deviceDark` directly needs to become scheme-aware.
 
-**Not started:** Packaging/distribution (explicitly out of scope per the original plan).
+**Not done / not asked for:** no build, lint, typecheck, or app launch was
+run to verify any of this — standing project instruction
+(`CLAUDE.md` → "Working preferences") is to never do that unless asked, and
+it wasn't asked. All verification so far has been the user opening the
+mockup HTML file directly and eyeballing the real app themselves after each
+change round.
 
 ## 3. Key decisions
 
-- **Windows `SendInput` via `koffi`** (not nut-js) — ported proven struct layout/VK tables from the old `host/kiyro_host/execution.py`.
-- **`host/` Python package left untouched**, dormant, not deleted.
-- **Not `sandbox: true`** in `webPreferences` — a sandboxed preload's `require()` of local project files was unreliable and failed silently, breaking `window.kiyro`. Deliberately kept `contextIsolation: true` + `nodeIntegration: false` instead.
-- **Hide-on-close instead of quit** — the main process (not the window) owns the serial connection and execution pipeline, so the window can safely disappear while everything else keeps running. Only the tray's "Quit Kiyro" or an OS-level quit actually tears down (`isQuitting` flag gates this).
-- **`app.requestSingleInstanceLock()` added** — hide-on-close makes it easy to forget an old instance is still alive in the tray and launch a competing one; a second instance previously would try to open the already-held COM port and spin retrying forever.
-- **`--hidden` CLI flag implemented for "start with Windows"**, but `app.setLoginItemSettings({openAtLogin:true})` was deliberately NOT wired up — enabling auto-launch on its own felt like a consent decision beyond scope; flagged to the user as a natural follow-up.
-- **Diagnostic `[kiyro][diag]` console.log lines** were added across `profile-store.ts`, `use-app-bootstrap.ts`, `resolve-control.ts`, `execution-pipeline.ts`, `ipc-handlers.ts`, `main.ts` during an earlier persistence investigation. User explicitly said "do not remove the diagnostics yet" — **do not remove them** unless the user says so.
-- **Encoder push-button codes (`ENC_BTN:3`/`ENC_BTN:5`) intentionally left unmapped** — traced end-to-end and determined this is documented, unconfirmed hardware wiring (see `docs/device-protocol.md`, `firmware/kiyro-macropad/pins.h`), not a bug. The user's own logs showed these codes firing on every encoder rotation in both directions — evidence of electrical crosstalk, not real presses. Fabricating a mapping here would introduce false triggers. No code changed for this.
+- **Design iterated on a disposable HTML mockup first, ported to the real
+  components last** — many small back-and-forth tweaks (highlight shape,
+  glow removal, opacity, border-radius, hard vs. soft edges) happened
+  entirely in the scratch HTML before "implement it" moved the finished
+  design into `encoder-dial.tsx`/`key-cap.tsx`. If more visual iteration is
+  wanted, the fastest path is probably back in a scratch HTML file first,
+  *then* port — not iterating directly against the real MUI `sx` code.
+- **Selection state, on both components, deliberately has no ring/outline
+  border** — user explicitly said the ring-based selected state "looks
+  bad" / "remove the outlines too." Selection now reads through
+  posture (pressed-down) + brightness, not a drawn border. Don't
+  reintroduce a selection ring without checking this first.
+- **No glow-on-click / bloom effect** — user explicitly asked to remove it
+  ("remove the glow when I click"). The `live` state on keycaps is press
+  motion only now, no box-shadow bloom.
+- **Per-accent wall/highlight colors are computed (`darken`/`alpha`), not
+  hand-authored per color** — so a fourth accent color, if one is ever
+  added, gets a matching wall/highlight for free rather than needing a new
+  hardcoded shadow rule.
 
-## 4. Important discoveries (the COM3 debugging chain)
+## 4. Important discoveries
 
-Working backward through what's been ruled out, in order:
-
-1. **Not Kiyro/Electron's own code** — a completely fresh Electron process, on its very first-ever open attempt, fails identically. No leaked handle, no race in the app's retry loop.
-2. **Arduino IDE was running** and holding the port (a real, separate issue) — fully closed; did not fix the core problem, but is a legitimate thing to keep closed when using Kiyro.
-3. **Multiple Kiyro instances competing for the port** — real bug, fixed via `requestSingleInstanceLock()` (see §3). Confirmed via `Get-Process`: 4 stray `electron.exe` processes were found running simultaneously at one point.
-4. **Device enumeration is fine** — Device Manager consistently shows `USB Serial Device (COM3)`, `VID_303A&PID_1001`, Status OK, `CM_PROB_NONE`, even across multiple replug cycles.
-5. **Driver-level corruption** — uninstalled the device in Device Manager, replugged; Windows reinstalled the driver cleanly (Event Viewer confirmed `usbser` install status 0). Same error persisted after this.
-6. **Firmware-level theory (incomplete upload broke the firmware)** — tested by forcing the chip into raw ROM bootloader/download mode: hold physical **button 6** (maps to GPIO9/BOOT per `firmware/kiyro-macropad/pins.h`) while replugging. Same error 31 persisted even here. Since ROM bootloader mode is hardware/ROM-driven and shouldn't depend on app firmware state, this weighs against "bad firmware" as the root cause — though it's not 100% certain the chip actually entered download mode (no independent confirmation was possible, since the port couldn't even be opened to check).
-7. **Confirmed across 3 independent tools/stacks**: Node's `serialport` (Kiyro itself), `esptool` v5.3.1 (Python/pyserial, separate venv `esptool-env`), and a standalone script `scripts/serial_test.py` (pyserial) — all three fail with the exact same `PermissionError(13, ... error 31)`.
-8. **No other process is holding the port** — checked via `Get-Process` for anything serial-related; nothing found once Arduino IDE and stray Kiyro instances were closed.
-
-**Current working theory:** physical/electrical fault on the board (USB connector or D+/D- lines) — possibly the same marginal connection that caused the original firmware upload to fail partway through — or a PC-side USB power-management quirk that survived a driver reinstall. **Not confirmed either way.**
-
-**Not yet tried:**
-- Disable USB selective suspend (Control Panel → Power Options → Advanced settings → USB settings).
-- Disable power management on the USB Root Hub in Device Manager (uncheck "Allow the computer to turn off this device to save power").
-- Try a genuinely different physical USB port (rear motherboard port, not front panel/hub) and a different cable.
-- Test the macro pad on a **different computer entirely** — the cleanest remaining test to separate "this PC" from "the board itself." User said they don't currently have another computer available.
-- If all of the above fails: likely board-level hardware repair (reseat/reflow the USB connector, check D+/D- continuity) — not fixable in software.
-
-**Note:** all destructive/admin-requiring diagnostic steps (e.g. `pnputil /disable-device`) failed with "Access is denied" — the working shell in this session is not elevated, so any future admin-level Windows diagnostics need the user to run them directly (elevated PowerShell or Device Manager GUI).
+- **The CSS-vars/`darken()` incompatibility (above) is a general trap in
+  this codebase**, not a one-off bug — any future code that needs to feed a
+  `theme.palette.*` color into a JS color-math function (`darken`, `alpha`,
+  `lighten`, manual RGB math, etc.) will hit the same
+  `Cannot read properties of undefined` / `Unsupported var(...) color`
+  failure sequence. The fix pattern is: export the literal
+  `colorSchemes.<mode>.palette` object being built (like `deviceDark`) and
+  read from that, not from `theme.palette` / `vars(theme).palette`.
+- **`color-mix()` is a safe, dependency-free way to derive a translucent
+  variant of any `var()`-based CSS color** directly in an `sx` box-shadow
+  string, without needing to know whether MUI generated a `-Channel`
+  companion variable for that token. Reach for this over the
+  `rgba(var(--foo-mainChannel) / alpha)` pattern unless the channel
+  variable's existence has actually been confirmed for this MUI version.
 
 ## 5. Files and artifacts
 
-- Plan: `C:\Users\anass\.claude\plans\imperative-humming-cerf.md` (original Electron-conversion plan, approved, phases A–F).
-- App root: `kiyro-macropad/` (renamed from `kiyro/`; own git repo, root `Macro Pad/.git` was deleted per user request).
-- Key Electron files: `electron/main.ts`, `electron/tray.ts`, `electron/menu.ts`, `electron/serial-bridge.ts`, `electron/preload.ts`, `electron/win-sendinput.ts`, `electron/resolve-control.ts`, `electron/execution-pipeline.ts`, `electron/ipc-handlers.ts`, `electron/profile-storage.ts`, `electron/preferences-storage.ts`.
-- Shared framework-free code: `src/lib/protocol/*`, `src/lib/devices/*`, `src/lib/preferences/schema.ts`, `src/lib/electron/ipc-types.ts`.
-- Firmware wiring reference: `firmware/kiyro-macropad/pins.h` (button-to-GPIO map, BOOT button = physical button 6), `docs/device-protocol.md` (documents encoder mapping as unconfirmed).
-- Firmware backup: `scripts/macro_pad_backup.bin` (4MB, full flash dump) — ready to reflash once the port can be opened again. Also present: `scripts/app0.bin`, `scripts/app0_fast_buttons_20ms.bin`, `scripts/serial_test.py` (pyserial test script used in diagnosis), `scripts/macro_mapper.py`, `scripts/macro_pad_ctrlc.py`.
-- `esptool` v5.3.1 installed in a separate Python venv `esptool-env` on the user's machine (not in this repo).
+- Mockup (scratch, not in repo — see caveat in §2):
+  `...\scratchpad\kiyro-3d-preview.html`
+- `src/features/device/encoder-dial.tsx` — knob visuals.
+- `src/features/device/key-cap.tsx` — keycap visuals.
+- `src/theme/theme.ts` — `deviceDark` now exported; `DevicePalette` type
+  also exported (already was).
+- `src/theme/tokens.ts` — untouched, but `radius.xl` vs `radius.lg` is the
+  live open question on `key-cap.tsx`'s corner rounding (see §2 note).
 
 ## 6. Risks and uncertainties
 
-**Verified facts:**
-- COM3 fails to open (`SetCommState` error 31) across 3 independent software stacks, on a fresh driver install, with no other process holding it.
-- The device enumerates correctly at the USB descriptor level (VID/PID/COM assignment correct, Status OK).
-- Multiple Kiyro/Electron instances can run simultaneously without a lock (was a real bug; now fixed).
-
-**Assumptions (not confirmed):**
-- That holding button 6 during replug actually forced ROM download mode — never independently confirmed, since the port couldn't be opened to verify a handshake.
-- That the root cause is hardware/electrical rather than a deeper Windows/driver-stack issue — this is the leading theory but not proven; the "different computer" test that would confirm it has not been run.
-- That the interrupted firmware upload and the current connection failure share a root cause (e.g. a marginal USB connection) — plausible narrative, not verified.
-
-**Unresolved questions:**
-- Is this a board-hardware fault or a PC-side USB/power-management issue? Unknown until either (a) tested on another computer, or (b) USB selective suspend / hub power management is disabled and retested.
-- Whether the tray/single-instance-lock code changes are fully correct — never build/lint/type-checked this session (per explicit "no tests or builds" instruction), only manually read through.
+- **Real-component visual state is unverified beyond code read-through** —
+  no dev server was launched by me this session (per standing instruction).
+  The user has been checking the real app themselves after each round; the
+  last thing said was "still missing a lot to match this html," which was
+  addressed with the encoder-dial rewrite above, but that specific round
+  hasn't been confirmed fixed yet by the user.
+- **`key-cap.tsx`'s `borderRadius` reverted on disk mid-session** outside
+  my own edit — flagged above, not resolved either way.
+- **The literal `#262d37` knob-face color and the computed
+  `darken(faceColor, 0.35)` wall colors are eyeballed against the mockup's
+  page background**, which is a plain dark page (`#0b0e12`), not
+  necessarily identical to wherever these components actually render in
+  the real app (behind other chrome, different ambient background). Worth
+  a real visual check, not just trusting the port was faithful.
 
 ## 7. Next action
 
-Ask the user whether they've tried any of the "not yet tried" steps in §4 (USB selective suspend, hub power management, different port/cable, or a different computer). If the port still won't open after those, treat it as a hardware fault outside the scope of software fixes and stop trying further OS-level workarounds. If the port *does* open, immediately retry `esptool` with `scripts/macro_pad_backup.bin` to restore firmware, then re-verify Kiyro's connect flow end-to-end (including the tray/single-instance changes, which are still unverified against a real device).
+Wait for the user to check the real app against the mockup after the
+encoder-dial rewrite and report back. If more mismatches turn up, prefer
+diffing the specific CSS property in the mockup's `<style>` block against
+the corresponding `sx` rule in `encoder-dial.tsx`/`key-cap.tsx` rather than
+re-deriving the design from scratch — the mockup already encodes every
+decision the user has approved.
 
 ## 8. Suggested skills
 
-None of the currently available skills are directly relevant to this task (Electron/serial/firmware debugging has no dedicated skill in this environment). If a build/lint/test pass is eventually requested, no special skill is needed — use the project's own `npm` scripts (`build:electron`, `electron:dev`) directly.
+None of the currently available skills directly cover "port a finished HTML
+mockup's CSS into MUI `sx` props." If further ground-up visual design
+exploration is wanted (not just porting), `artifact-design` or
+`ui-ux-pro-max` could be relevant starting points, but neither was used
+this session — everything here was direct CSS/`sx` editing.
