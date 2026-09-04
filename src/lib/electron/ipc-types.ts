@@ -96,15 +96,18 @@ export type UpdaterStatusPayload =
  * by `connect()` so a caller (Settings' "Connect" button) can show immediate
  * feedback. `'unconfigured'` means this build has no
  * `KIYRO_DISCORD_CLIENT_SECRET` baked in; `'unavailable'` means Discord
- * itself isn't running right now.
+ * itself isn't running right now; `'error'` carries a real message — see
+ * `electron/discord-rpc.ts`'s `DiscordStatus` doc comment for why this is a
+ * discriminated union rather than a plain string enum.
  */
 export type DiscordStatusPayload =
-  | 'disconnected'
-  | 'connecting'
-  | 'authorizing'
-  | 'connected'
-  | 'unavailable'
-  | 'unconfigured';
+  | { state: 'disconnected' }
+  | { state: 'connecting' }
+  | { state: 'authorizing' }
+  | { state: 'connected' }
+  | { state: 'unavailable' }
+  | { state: 'unconfigured' }
+  | { state: 'error'; message: string };
 
 /** Pushed from main whenever the real serial connection's state changes. */
 export interface DeviceStatusPayload {

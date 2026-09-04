@@ -6,6 +6,8 @@ import Tooltip from '@mui/material/Tooltip';
 import { DownloadIcon, ErrorOutlineIcon, RestartAltIcon } from '@/components/icons';
 import { useKiyroBridge } from '@/hooks/use-kiyro-bridge';
 import { useUpdateStore } from '@/stores/update-store';
+import { Button, IconButton } from '@mui/material';
+import { radius } from '@/theme/tokens';
 
 /**
  * The one place an available or downloaded update becomes visible without
@@ -25,6 +27,18 @@ import { useUpdateStore } from '@/stores/update-store';
  * Clicking this chip is the action that actually starts a download or an
  * install — see `electron/updater.ts`'s doc comment for why checking runs on
  * its own in the background but those two steps never do.
+ *
+ * TO PREVIEW A STATE WHILE EDITING THIS FILE: `npm run electron:dev`, open
+ * DevTools on the renderer (View → Toggle Developer Tools) and drive
+ * `update-store.ts`'s dev-only console handle directly — no real release,
+ * download, or GitHub round trip involved, and Fast Refresh keeps whatever
+ * you last set as you edit and save this file:
+ *
+ *   window.__kiyroUpdateStore.getState().setStatus({ state: 'available', version: '9.9.9' })
+ *   window.__kiyroUpdateStore.getState().setStatus({ state: 'downloading', percent: 42 })
+ *   window.__kiyroUpdateStore.getState().setStatus({ state: 'downloaded', version: '9.9.9' })
+ *   window.__kiyroUpdateStore.getState().setStatus({ state: 'error', message: 'Something went wrong' })
+ *   window.__kiyroUpdateStore.getState().setStatus({ state: 'idle' }) // back to hidden
  */
 export function UpdateChip() {
   const kiyro = useKiyroBridge();
@@ -37,55 +51,68 @@ export function UpdateChip() {
     case 'available':
       return (
         <Tooltip title={`Download Kiyro ${status.version}`}>
-          <Chip
-            label={`Update ${status.version}`}
-            icon={<DownloadIcon sx={{ fontSize: 14 }} />}
+          <Button
+            variant="contained"
+            startIcon={<DownloadIcon sx={{ fontSize: 14 }} />}
             size="small"
             color="primary"
-            variant="outlined"
-            clickable
             onClick={() => void kiyro.updater.download()}
-          />
+            sx={{
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Update {status.version}
+          </Button>
         </Tooltip>
       );
 
     case 'downloading':
       return (
-        <Chip
-          label={`Downloading ${status.percent}%`}
-          icon={<CircularProgress size={12} thickness={6} />}
+        <Button
           size="small"
           variant="outlined"
           disabled
-        />
+          sx={{
+            whiteSpace: 'nowrap',
+          }}
+        >
+          Downloading {status.percent}%
+        </Button>
       );
 
     case 'downloaded':
       return (
         <Tooltip title={`Restart Kiyro to install ${status.version}`}>
-          <Chip
-            label="Restart to update"
-            icon={<RestartAltIcon sx={{ fontSize: 14 }} />}
+          <Button
+            variant="contained"
+            startIcon={<RestartAltIcon sx={{ fontSize: 14 }} />}
             size="small"
             color="primary"
-            clickable
             onClick={() => void kiyro.updater.quitAndInstall()}
-          />
+            sx={{
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Restart to update
+          </Button>
         </Tooltip>
       );
 
     case 'error':
       return (
         <Tooltip title={`${status.message} — click to check again`}>
-          <Chip
-            label="Update failed"
-            icon={<ErrorOutlineIcon sx={{ fontSize: 14 }} />}
+          <Button
+            startIcon={<ErrorOutlineIcon sx={{ fontSize: 14 }} />}
             size="small"
             color="error"
             variant="outlined"
-            clickable
             onClick={() => void kiyro.updater.check().then(setStatus)}
-          />
+            sx={{
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Update failed
+          </Button>
         </Tooltip>
       );
 

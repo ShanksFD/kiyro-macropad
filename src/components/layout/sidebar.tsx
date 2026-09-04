@@ -147,7 +147,11 @@ export function Sidebar() {
 
       <Divider />
 
-      <Stack direction="row" spacing={2} sx={{ alignItems: 'center', px: 5, py: 3 }}>
+      <Stack
+        direction="row"
+        spacing={2}
+        sx={{ alignItems: 'center', justifyContent: 'space-between', px: 5, py: 3 }}
+      >
         <Typography variant="caption" color="text.secondary">
           v{process.env.NEXT_PUBLIC_APP_VERSION}
         </Typography>

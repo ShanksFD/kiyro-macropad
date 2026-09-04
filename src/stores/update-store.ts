@@ -17,3 +17,13 @@ export const useUpdateStore = create<{
   status: { state: 'idle' },
   setStatus: (status) => set({ status }),
 }));
+
+// Dev-only: lets `<UpdateChip />` (and the sidebar it lives in) be driven
+// from the DevTools console without a real release cycle — set any status by
+// hand and the chip re-renders live. Stripped from a production build since
+// `next build` sets `NODE_ENV=production`, so this never ships. See
+// `update-chip.tsx`'s comment for the exact console commands.
+if (typeof window !== 'undefined' && process.env.NODE_ENV !== 'production') {
+  (window as typeof window & { __kiyroUpdateStore?: typeof useUpdateStore }).__kiyroUpdateStore =
+    useUpdateStore;
+}

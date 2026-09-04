@@ -20,14 +20,25 @@ import type { DiscordStatusPayload } from '@/lib/electron/ipc-types';
 import { useUiStore } from '@/stores/ui-store';
 import type { Preferences } from '@/stores/ui-store';
 
-const DISCORD_STATUS_LABEL: Record<DiscordStatusPayload, string> = {
-  disconnected: 'Not connected',
-  connecting: 'Connecting…',
-  authorizing: 'Check Discord for an approval prompt…',
-  connected: 'Connected',
-  unavailable: 'Discord isn’t running',
-  unconfigured: 'Not available in this build',
-};
+/** A function, not a `Record` — `DiscordStatusPayload` is a discriminated union (carries a message on `'error'`), not a plain string enum a `Record` could key off directly. */
+function discordStatusLabel(status: DiscordStatusPayload): string {
+  switch (status.state) {
+    case 'disconnected':
+      return 'Not connected';
+    case 'connecting':
+      return 'Connecting…';
+    case 'authorizing':
+      return 'Check Discord for an approval prompt…';
+    case 'connected':
+      return 'Connected';
+    case 'unavailable':
+      return 'Discord isn’t running';
+    case 'unconfigured':
+      return 'Not available in this build';
+    case 'error':
+      return status.message;
+  }
+}
 
 function Section({
   title,
@@ -69,23 +80,22 @@ export function SettingsView() {
   const kiyro = useKiyroBridge();
   const discordStatus = useDiscordStore((state) => state.status);
   const setDiscordStatus = useDiscordStore((state) => state.setStatus);
-  const discordBusy = discordStatus === 'connecting' || discordStatus === 'authorizing';
+  const discordBusy = discordStatus.state === 'connecting' || discordStatus.state === 'authorizing';
 
   const connectDiscord = async () => {
     if (!kiyro) return;
     const result = await kiyro.discord.connect();
     setDiscordStatus(result);
-    if (result === 'connected') notify('Connected to Discord.', 'success');
-    else if (result === 'unavailable') notify('Discord isn’t running.', 'warning');
-    else if (result === 'unconfigured') notify('This build has no Discord integration configured.', 'warning');
-    // Any other outcome (chiefly `'disconnected'` — authorization itself
-    // failed, e.g. a rejected or revoked token) used to show nothing at
-    // all: the chip just silently stayed "Not connected" with no
-    // explanation, indistinguishable from the button not having done
-    // anything. Catching it here rather than enumerating every possible
-    // failure by name means a *future* failure mode can't go silent the
-    // same way again either.
-    else notify('Could not connect to Discord — see the console for details.', 'error');
+    if (result.state === 'connected') notify('Connected to Discord.', 'success');
+    else if (result.state === 'unavailable') notify('Discord isn’t running.', 'warning');
+    else if (result.state === 'unconfigured')
+      notify('This build has no Discord integration configured.', 'warning');
+    // A real message now, from `DiscordStatus`'s `'error'` variant, instead
+    // of a generic "see the console" — this used to be the one place a
+    // genuine failure (a rejected token, a scope/permission problem) was
+    // completely invisible: the chip just silently stayed "Not connected,"
+    // indistinguishable from the button never having done anything.
+    else if (result.state === 'error') notify(`Could not connect to Discord: ${result.message}`, 'error');
   };
 
   const disconnectDiscord = async () => {
@@ -94,7 +104,7 @@ export function SettingsView() {
     // The main process also pushes this over `onStatus`, but setting it
     // directly here means the button's own disabled state updates in the
     // same tick rather than waiting on that round trip.
-    setDiscordStatus('disconnected');
+    setDiscordStatus({ state: 'disconnected' });
     notify('Disconnected from Discord.', 'info');
   };
 
@@ -161,14 +171,20 @@ export function SettingsView() {
             <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
               <Chip
                 icon={<BrandDiscordIcon sx={{ fontSize: 14 }} />}
-                label={DISCORD_STATUS_LABEL[discordStatus]}
-                color={discordStatus === 'connected' ? 'primary' : 'default'}
-                variant={discordStatus === 'connected' ? 'filled' : 'outlined'}
+                label={discordStatusLabel(discordStatus)}
+                color={
+                  discordStatus.state === 'connected'
+                    ? 'primary'
+                    : discordStatus.state === 'error'
+                      ? 'error'
+                      : 'default'
+                }
+                variant={discordStatus.state === 'connected' ? 'filled' : 'outlined'}
               />
               <Button variant="outlined" disabled={discordBusy} onClick={() => void connectDiscord()}>
-                {discordStatus === 'connected' ? 'Reconnect' : 'Connect to Discord'}
+                {discordStatus.state === 'connected' ? 'Reconnect' : 'Connect to Discord'}
               </Button>
-              {discordStatus === 'connected' && (
+              {discordStatus.state === 'connected' && (
                 <Button variant="outlined" color="inherit" onClick={() => void disconnectDiscord()}>
                   Disconnect
                 </Button>

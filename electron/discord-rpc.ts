@@ -59,18 +59,49 @@ const OPCODE = { HANDSHAKE: 0, FRAME: 1, CLOSE: 2, PING: 3, PONG: 4 } as const;
 const MAX_PIPE_INDEX = 9;
 const HANDSHAKE_TIMEOUT_MS = 2000;
 const COMMAND_TIMEOUT_MS = 8000;
+/**
+ * `AUTHORIZE` is the one command that waits on an actual human — noticing
+ * Discord's consent prompt, reading it, clicking Authorize (and, per
+ * `#authorizeFresh`'s own doc comment, this can involve Discord opening a
+ * real browser window for elevated-scope consent, not just an in-app
+ * popup, which takes longer still to notice and complete). The blanket
+ * 8-second `COMMAND_TIMEOUT_MS` — sized for the fast, fully automated
+ * exchanges (`AUTHENTICATE`, `GET_VOICE_SETTINGS`, `SET_VOICE_SETTINGS`) —
+ * was nowhere near enough time for a person to do that, and giving up that
+ * early had a nasty compounding effect: `#authorizeSession`'s retry-on-
+ * rejection logic would see the timeout as "the token failed, try a fresh
+ * authorization," firing a *second* AUTHORIZE (and a second popup) while
+ * the user was still in the middle of dealing with the first one — which
+ * reads exactly like "it keeps showing the prompt again and again." Two
+ * minutes is a generous allowance for a person, not a program, to respond.
+ */
+const AUTHORIZE_TIMEOUT_MS = 120_000;
 /** Refresh this long before actual expiry, so a command mid-flight never races an access token dying under it. */
 const REFRESH_MARGIN_MS = 60_000;
 
+/**
+ * A discriminated union, not a plain string enum, specifically so `'error'`
+ * can carry *why* — matching the pattern `UpdaterStatusPayload`
+ * (`src/lib/electron/ipc-types.ts`) already established for exactly this
+ * problem. Before this, every kind of failure (a rejected token, a genuine
+ * scope/permission problem, a timeout) all collapsed into the same bare
+ * `'disconnected'`, which is indistinguishable from "never tried" — the
+ * Settings UI had nothing real to show someone besides a generic "didn't
+ * work," which is exactly the situation that made a real bug (`AUTHORIZE`'s
+ * timeout being far too short for a human) hard to tell apart from Discord's
+ * own restricted-scope rejection (which needs a completely different fix —
+ * adding the account as a Developer Portal tester, not a code change).
+ */
 export type DiscordStatus =
-  | 'disconnected'
-  | 'connecting'
-  | 'authorizing'
-  | 'connected'
+  | { state: 'disconnected' }
+  | { state: 'connecting' }
+  | { state: 'authorizing' }
+  | { state: 'connected' }
   /** No `discord-ipc-*` pipe answered — Discord isn't running. */
-  | 'unavailable'
+  | { state: 'unavailable' }
   /** This build has no `KIYRO_DISCORD_CLIENT_SECRET` baked in — see `scripts/generate-build-secrets.mjs`. */
-  | 'unconfigured';
+  | { state: 'unconfigured' }
+  | { state: 'error'; message: string };
 
 interface VoiceSettings {
   mute: boolean;
@@ -121,7 +152,7 @@ function encodeFrame(opcode: number, payload: unknown): Buffer {
 }
 
 export class DiscordRpcClient {
-  #status: DiscordStatus = 'disconnected';
+  #status: DiscordStatus = { state: 'disconnected' };
   #socket: net.Socket | null = null;
   #reader = new FrameReader();
   #pending = new Map<string, PendingCommand>();
@@ -139,7 +170,13 @@ export class DiscordRpcClient {
   }
 
   #setStatus(status: DiscordStatus): void {
-    if (this.#status === status) return;
+    // Compared by `.state` rather than the whole object (which would never
+    // be `===` anyway, being a fresh literal every call): skip a redundant
+    // emit for the same simple state repeating, but always emit an `error`
+    // even if the previous status also happened to be `error` — a second
+    // failure's message is still worth telling, not silently swallowed
+    // because the label matched.
+    if (this.#status.state === status.state && status.state !== 'error') return;
     this.#status = status;
     this.#statusListeners.emit(status);
   }
@@ -150,7 +187,7 @@ export class DiscordRpcClient {
    * quietly re-establishes the pipe after Discord restarts.
    */
   async connect(): Promise<void> {
-    if (this.#status === 'connected') return;
+    if (this.#status.state === 'connected') return;
     if (this.#connecting) return this.#connecting;
 
     this.#connecting = this.#doConnect().finally(() => {
@@ -169,31 +206,32 @@ export class DiscordRpcClient {
    */
   disconnect(): void {
     this.#teardown();
-    this.#setStatus('disconnected');
+    this.#setStatus({ state: 'disconnected' });
   }
 
   async #doConnect(): Promise<void> {
     if (DISCORD_CLIENT_SECRET === '') {
-      this.#setStatus('unconfigured');
+      this.#setStatus({ state: 'unconfigured' });
       return;
     }
 
-    this.#setStatus('connecting');
+    this.#setStatus({ state: 'connecting' });
 
     const socket = await this.#openPipe();
     if (!socket) {
-      this.#setStatus('unavailable');
+      this.#setStatus({ state: 'unavailable' });
       return;
     }
     this.#socket = socket;
 
     try {
       await this.#authorizeSession();
-      this.#setStatus('connected');
+      this.#setStatus({ state: 'connected' });
     } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
       console.error('[kiyro][discord] authorization failed:', error);
       this.#teardown();
-      this.#setStatus('disconnected');
+      this.#setStatus({ state: 'error', message });
     }
   }
 
@@ -257,7 +295,7 @@ export class DiscordRpcClient {
     socket.on('close', () => {
       console.log('[kiyro][discord] pipe closed');
       this.#teardown();
-      this.#setStatus('disconnected');
+      this.#setStatus({ state: 'disconnected' });
     });
     socket.on('error', (error) => {
       console.error('[kiyro][discord] socket error:', error);
@@ -282,7 +320,7 @@ export class DiscordRpcClient {
     }
   }
 
-  #sendCommand(cmd: string, args: unknown): Promise<unknown> {
+  #sendCommand(cmd: string, args: unknown, timeoutMs: number = COMMAND_TIMEOUT_MS): Promise<unknown> {
     if (!this.#socket) return Promise.reject(new Error('Discord RPC socket not open'));
 
     const nonce = randomUUID();
@@ -292,7 +330,7 @@ export class DiscordRpcClient {
       const timer = setTimeout(() => {
         this.#pending.delete(nonce);
         reject(new Error(`Discord RPC command '${cmd}' timed out`));
-      }, COMMAND_TIMEOUT_MS);
+      }, timeoutMs);
 
       this.#pending.set(nonce, { resolve, reject, timer });
       socket.write(encodeFrame(OPCODE.FRAME, { cmd, args, nonce }));
@@ -334,12 +372,21 @@ export class DiscordRpcClient {
     }
   }
 
+  /**
+   * Sends `AUTHORIZE` with `AUTHORIZE_TIMEOUT_MS`, not the default — for
+   * restricted scopes like `rpc.voice.write` Discord's consent step can
+   * open an actual browser window instead of just an in-app popup, which
+   * takes a person real time to notice and complete either way. See
+   * `AUTHORIZE_TIMEOUT_MS`'s own comment for what happens if this times out
+   * too early.
+   */
   async #authorizeFresh(): Promise<DiscordTokens> {
-    this.#setStatus('authorizing');
-    const authorizeResult = (await this.#sendCommand('AUTHORIZE', {
-      client_id: CLIENT_ID,
-      scopes: ['rpc', 'rpc.voice.read', 'rpc.voice.write'],
-    })) as { code: string };
+    this.#setStatus({ state: 'authorizing' });
+    const authorizeResult = (await this.#sendCommand(
+      'AUTHORIZE',
+      { client_id: CLIENT_ID, scopes: ['rpc', 'rpc.voice.read', 'rpc.voice.write'] },
+      AUTHORIZE_TIMEOUT_MS,
+    )) as { code: string };
 
     return this.#exchangeCode(authorizeResult.code);
   }
@@ -422,14 +469,14 @@ export class DiscordRpcClient {
   /** Discord's API takes an explicit boolean, not a toggle — reading current state first is what makes this a toggle at all. */
   async toggleMute(): Promise<void> {
     await this.connect();
-    if (this.#status !== 'connected') throw new Error(`Discord not connected (${this.#status})`);
+    if (this.#status.state !== 'connected') throw new Error(`Discord not connected (${this.#status.state})`);
     const current = await this.#getVoiceSettings();
     await this.#setVoiceSettings({ mute: !current.mute });
   }
 
   async toggleDeafen(): Promise<void> {
     await this.connect();
-    if (this.#status !== 'connected') throw new Error(`Discord not connected (${this.#status})`);
+    if (this.#status.state !== 'connected') throw new Error(`Discord not connected (${this.#status.state})`);
     const current = await this.#getVoiceSettings();
     await this.#setVoiceSettings({ deaf: !current.deaf });
   }
@@ -444,7 +491,7 @@ export class DiscordRpcClient {
    */
   async adjustMicVolume(direction: 1 | -1, step: number): Promise<void> {
     await this.connect();
-    if (this.#status !== 'connected') throw new Error(`Discord not connected (${this.#status})`);
+    if (this.#status.state !== 'connected') throw new Error(`Discord not connected (${this.#status.state})`);
     const current = await this.#getVoiceSettings();
     const clampedStep = Math.min(100, Math.max(1, Math.trunc(step)));
     const next = Math.min(100, Math.max(0, current.input.volume + direction * clampedStep));

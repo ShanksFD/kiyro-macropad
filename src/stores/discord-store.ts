@@ -14,6 +14,6 @@ export const useDiscordStore = create<{
   status: DiscordStatusPayload;
   setStatus: (status: DiscordStatusPayload) => void;
 }>((set) => ({
-  status: 'disconnected',
+  status: { state: 'disconnected' },
   setStatus: (status) => set({ status }),
 }));

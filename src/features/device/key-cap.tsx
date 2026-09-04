@@ -5,12 +5,13 @@ import Box from '@mui/material/Box';
 import Stack from '@mui/material/Stack';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
+import { alpha, darken } from '@mui/material/styles';
 import { HelpOutlineIcon } from '@/components/icons';
 import { describeAction } from '@/lib/actions/format';
 import type { Action } from '@/lib/actions/types';
 import type { ButtonDescriptor } from '@/lib/devices/types';
 import { selectIsLive, useLiveInputStore } from '@/stores/live-input-store';
-import { monoFontFamily } from '@/theme/theme';
+import { deviceDark, monoFontFamily, type DevicePalette } from '@/theme/theme';
 import { radius } from '@/theme/tokens';
 import { ActionIcon } from '@/features/editor/action-icon';
 
@@ -48,6 +49,16 @@ const ACCENT_BG: Record<KeycapAccent, string> = {
   white: 'device.keycapWhite',
 };
 
+/** Same three accents, keyed for direct `theme.palette.device` lookups —
+ * needed alongside `ACCENT_BG`'s dot-path strings because the wall/highlight
+ * shadows below are computed colours (`darken`/`alpha`), not values MUI's sx
+ * resolver can resolve from a string. */
+const ACCENT_DEVICE_KEY: Record<KeycapAccent, keyof DevicePalette> = {
+  green: 'keycapGreen',
+  orange: 'keycapOrange',
+  white: 'keycapWhite',
+};
+
 /**
  * A physical key.
  *
@@ -73,55 +84,96 @@ export function KeyCap({ button, action, selected, showEventCode, onSelect }: Pr
         onClick={() => onSelect(button.id)}
         aria-label={`${button.label}, ${description}${selected ? ', selected' : ''}`}
         aria-pressed={selected}
-        sx={(theme) => ({
-          position: 'relative',
-          width: '100%',
-          aspectRatio: '1 / 1',
-          borderRadius: `${radius.lg}px`,
-          p: 2,
-          alignItems: 'stretch',
-          justifyContent: 'flex-start',
-          textAlign: 'left',
-          overflow: 'hidden',
-          boxShadow: 'none',
-          // Every key gets a positional accent now, so it always wins over
-          // the old assigned/unassigned bg distinction (`keycapAssigned` vs
-          // `keycap`). That distinction still reads through the label text
-          // ("Unassigned" at reduced opacity) and the action icon, just not
-          // through this background any more.
-          bgcolor: ACCENT_BG[accent],
-          color: accent === 'white' ? 'device.legendOnWhite' : 'device.legend',
-          border: '1px solid',
-          borderColor: selected ? 'primary.main' : 'device.keycapEdge',
-          // Flat — no drop shadow. Press/selected/live states read entirely
-          // through colour, border, and a small translate on press instead.
-          transform: 'translateY(0)',
-          transition: theme.transitions.create(['transform', 'background-color', 'border-color'], {
-            duration: theme.transitions.duration.shorter,
-          }),
-          // An accent cap has nowhere lighter/darker to swap to on hover the
-          // way the old neutral keycap tone did (`keycapHover` would read as
-          // a colour clash against green/orange/white, not a lift) — a
-          // brightness filter keeps the same "lit up" read without
-          // introducing an unrelated hue.
-          '&:hover': { filter: 'brightness(1.08)' },
-          '&:active': { transform: 'translateY(1px)' },
-          '&.Mui-focusVisible': {
-            outline: '2px solid',
-            outlineColor: 'primary.main',
-            outlineOffset: 2,
-          },
-          ...(selected && {
-            outline: '2px solid',
-            outlineColor: 'primary.main',
-            outlineOffset: -1,
-          }),
-          ...(live && {
-            bgcolor: 'device.keycapLive',
-            color: 'primary.contrastText',
-            transform: 'translateY(1px)',
-          }),
-        })}
+        sx={(theme) => {
+          // A physical chiclet cap: a hard-edged light band across the top
+          // (an inset, zero-blur shadow — it follows the border-radius the
+          // same way the wall below does, for free) plus a solid-colour
+          // "wall" offset underneath standing in for the cap's own side,
+          // and a soft shadow it casts on the plate. Both colours are
+          // derived from the face colour itself so every accent gets a
+          // wall/highlight without hand-picking three more theme tokens.
+          const faceColor = deviceDark[ACCENT_DEVICE_KEY[accent]];
+          const wallColor = darken(faceColor, 0.35);
+          const highlightColor = alpha('#ffffff', accent === 'white' ? 0.25 : 0.15);
+
+          const restingShadow = [
+            `inset 0 3px 2px ${highlightColor}`,
+            `0 5px 0 ${wallColor}`,
+            '0 14px 20px -8px rgba(0, 0, 0, 0.55)',
+          ].join(', ');
+          // Pressing collapses the wall/highlight to a hairline and pulls
+          // the ambient shadow in tight — the cap travelling down onto the
+          // plate, not just dimming.
+          const pressedShadow = [
+            `inset 0 1px 0 ${highlightColor}`,
+            `0 1px 0 ${wallColor}`,
+            '0 3px 6px -2px rgba(0, 0, 0, 0.5)',
+          ].join(', ');
+          const selectedShadow = [
+            `inset 0 1px 0 ${highlightColor}`,
+            `0 2px 0 ${wallColor}`,
+            '0 4px 10px -4px rgba(0, 0, 0, 0.55)',
+          ].join(', ');
+
+          return {
+            position: 'relative',
+            width: '100%',
+            aspectRatio: '1 / 1',
+            borderRadius: `${radius.lg}px`,
+            p: 2,
+            alignItems: 'stretch',
+            justifyContent: 'flex-start',
+            textAlign: 'left',
+            overflow: 'hidden',
+            // Every key gets a positional accent now, so it always wins over
+            // the old assigned/unassigned bg distinction (`keycapAssigned`
+            // vs `keycap`). That distinction still reads through the label
+            // text ("Unassigned" at reduced opacity) and the action icon,
+            // just not through this background any more.
+            bgcolor: ACCENT_BG[accent],
+            color: accent === 'white' ? 'device.legendOnWhite' : 'device.legend',
+            border: 'none',
+            boxShadow: restingShadow,
+            transform: 'translateY(0)',
+            // Snappy, not springy — a flat ease-out reads as immediate under
+            // the pointer. A bouncy easing that visibly settles into place
+            // is what read as "laggy" here before.
+            transition: theme.transitions.create(['transform', 'box-shadow', 'filter'], {
+              duration: 90,
+            }),
+            // An accent cap has nowhere lighter/darker to swap to on hover the
+            // way the old neutral keycap tone did (`keycapHover` would read as
+            // a colour clash against green/orange/white, not a lift) — a
+            // brightness filter keeps the same "lit up" read without
+            // introducing an unrelated hue.
+            '&:hover': { filter: 'brightness(1.08)' },
+            '&:active': { transform: 'translateY(5px)', boxShadow: pressedShadow },
+            // Keyboard focus stays a fixed, universal blue on purpose — unlike
+            // `selected` below, this is an accessibility signal that should
+            // read the same everywhere, not vary per key colour.
+            '&.Mui-focusVisible': {
+              outline: '2px solid',
+              outlineColor: 'primary.main',
+              outlineOffset: 2,
+            },
+            // Selection reuses that same pressed geometry — settled onto the
+            // plate, wall collapsed — instead of lifting/scaling up, which
+            // fought the key's own 3D language rather than extending it. No
+            // ring: the pressed posture plus a brightness lift is what marks
+            // it, the same visual language as hover/press.
+            ...(selected && {
+              transform: 'translateY(3px)',
+              filter: 'brightness(1.08)',
+              boxShadow: selectedShadow,
+            }),
+            ...(live && {
+              bgcolor: 'device.keycapLive',
+              color: 'primary.contrastText',
+              transform: 'translateY(5px)',
+              boxShadow: pressedShadow,
+            }),
+          };
+        }}
       >
         <Stack sx={{ justifyContent: 'space-between', width: '100%', height: '100%' }}>
           <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>

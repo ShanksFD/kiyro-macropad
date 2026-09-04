@@ -139,56 +139,95 @@ export function EncoderDial({ encoder, bindings, selectedControlId, onSelect }: 
       }}
     >
       <Stack spacing={2} sx={{ alignItems: 'center', flexShrink: 0 }}>
-        <Box
-          aria-hidden
-          sx={(theme) => ({
-            position: 'relative',
-            width: 76,
-            height: 76,
-            borderRadius: '50%',
-            bgcolor: 'device.keycapAssigned',
-            border: '1px solid',
-            borderColor: 'device.keycapEdge',
-            boxShadow: 'none',
-            display: 'grid',
-            placeItems: 'center',
-            transform: `translateY(${pressed ? 2 : 0}px) rotate(${angleDeg}deg)`,
-            // Two different feels on purpose: each detent should read as an
-            // immediate, snappy response (short duration, so a fast run of
-            // them still blends into a smooth spin — see `useEncoderAngle`),
-            // but the spring-back once turning stops is a much bigger jump in
-            // one go (as much as 330°) and needs real time and a decelerating
-            // ease to read as an animated return rather than a teleport. At
-            // the old single 140ms duration it was technically animating but
-            // too fast to perceive as anything but a snap.
-            transition: theme.transitions.create(['transform', 'background-color'], {
-              duration: turningCw || turningCcw ? theme.transitions.duration.shorter : duration.slow,
-              easing: turningCw || turningCcw ? theme.transitions.easing.easeInOut : easing.out,
-            }),
-            ...((turningCw || turningCcw) && { bgcolor: 'device.keycapLive' }),
-          })}
-        >
-          {/* Indicator notch — shows rotation without relying on colour. */}
+        <Box sx={{ position: 'relative', width: 104, height: 104, display: 'grid', placeItems: 'center' }}>
+          {/* The knob as a genuine light source, not just a bordered circle:
+              an outer bloom plus an inset glow on the same ring, both sides
+              of it lighting up together — turning intensifies both rather
+              than swapping in a different effect. */}
           <Box
+            aria-hidden
             sx={{
               position: 'absolute',
-              top: 8,
-              width: 3,
-              height: 14,
-              borderRadius: 2,
-              bgcolor: turningCw || turningCcw ? 'primary.contrastText' : 'device.legendMuted',
-            }}
-          />
-          <Box
-            sx={{
-              width: 40,
-              height: 40,
+              inset: 0,
               borderRadius: '50%',
-              border: '1px dashed',
-              borderColor: 'device.legendMuted',
-              opacity: 0.5,
+              border: '2px solid',
+              borderColor: 'primary.main',
+              // `color-mix` (not a `-Channel` CSS var) makes the translucent
+              // bloom layer, since it works directly on the `var()` colour
+              // reference without depending on MUI's channel-variable naming.
+              boxShadow: [
+                '0 0 10px var(--mui-palette-primary-main)',
+                '0 0 26px 4px color-mix(in srgb, var(--mui-palette-primary-main) 40%, transparent)',
+                'inset 0 0 10px var(--mui-palette-primary-main)',
+              ].join(', '),
+              opacity: 0.6,
+              transition: 'opacity 240ms ease, box-shadow 240ms ease',
+              ...((turningCw || turningCcw) && {
+                opacity: 1,
+                boxShadow: [
+                  '0 0 14px var(--mui-palette-primary-main)',
+                  '0 0 36px 8px color-mix(in srgb, var(--mui-palette-primary-main) 55%, transparent)',
+                  'inset 0 0 14px var(--mui-palette-primary-main)',
+                ].join(', '),
+              }),
             }}
           />
+
+          <Box
+            aria-hidden
+            sx={(theme) => ({
+              position: 'relative',
+              width: 76,
+              height: 76,
+              borderRadius: '50%',
+              // Flat fill — the roundness reads entirely through the
+              // box-shadow layering below, same as the mockup. Picked by
+              // eye there against this app's actual dark background, so
+              // it's a literal value rather than an existing `device.*`
+              // token (none of those landed at the same shade).
+              background: '#262d37',
+              boxShadow: [
+                // soft light bouncing in from above the sphere, not on it
+                '0 -14px 18px -6px rgba(140, 150, 165, 0.5)',
+                // the sphere's own weight, cast down and out
+                '0 16px 28px -4px rgba(0, 0, 0, 0.6)',
+                // inner rim catching that same overhead light
+                'inset 0 5px 6px rgba(255, 255, 255, 0.25)',
+                // inner underside falling into shadow
+                'inset 0 -5px 8px rgba(0, 0, 0, 0.35)',
+              ].join(', '),
+              display: 'grid',
+              placeItems: 'center',
+              transform: `translateY(${pressed ? 2 : 0}px) rotate(${angleDeg}deg)`,
+              // Two different feels on purpose: each detent should read as an
+              // immediate, snappy response (short duration, so a fast run of
+              // them still blends into a smooth spin — see `useEncoderAngle`),
+              // but the spring-back once turning stops is a much bigger jump in
+              // one go (as much as 330°) and needs real time and a decelerating
+              // ease to read as an animated return rather than a teleport. At
+              // the old single 140ms duration it was technically animating but
+              // too fast to perceive as anything but a snap.
+              transition: theme.transitions.create('transform', {
+                duration: turningCw || turningCcw ? theme.transitions.duration.shorter : duration.slow,
+                easing: turningCw || turningCcw ? theme.transitions.easing.easeInOut : easing.out,
+              }),
+            })}
+          >
+            {/* Indicator dot — white with the ring's own blue glow, rather
+                than a neutral bar, so it reads as part of the same light
+                source as the ring instead of an unrelated marking. */}
+            <Box
+              sx={{
+                position: 'absolute',
+                top: 9,
+                width: 6,
+                height: 6,
+                borderRadius: '50%',
+                bgcolor: '#fbfdff',
+                boxShadow: '0 0 10px var(--mui-palette-primary-main)',
+              }}
+            />
+          </Box>
         </Box>
         <Typography variant="caption" sx={{ color: 'device.legend', fontWeight: 620 }}>
           {encoder.label}

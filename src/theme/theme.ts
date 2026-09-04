@@ -44,7 +44,17 @@ export interface DevicePalette {
   legendOnWhite: string;
 }
 
-const deviceDark: DevicePalette = {
+/**
+ * Exported (not just used to build `colorSchemes.dark`) so call sites that
+ * need to derive a *new* colour from a device token — e.g. `key-cap.tsx`
+ * computing a wall/highlight shade via `darken`/`alpha` — can read the
+ * literal value directly. `theme.palette.device.*` can't be used for that:
+ * with `cssVariables: true` those resolve to `var(--mui-palette-device-*)`
+ * strings at runtime, which `darken`/`alpha` can't parse. Only safe because
+ * this app currently defines a single (dark) colour scheme — a second
+ * scheme would need this to become scheme-aware too.
+ */
+export const deviceDark: DevicePalette = {
   chassis: '#171C24',
   chassisEdge: '#0A0D11',
   keycap: '#242C37',
@@ -156,32 +166,67 @@ export const theme = createTheme({
     MuiButton: {
       defaultProps: { disableElevation: true, disableRipple: true, size: 'small' },
       styleOverrides: {
-        root: ({ theme: t }) => ({
-          borderRadius: radius.md,
-          paddingInline: 14,
-          minHeight: 36,
-          transition: `background-color ${duration.base}ms ${easing.easeInOut}`,
-          '&:hover': {
-            backgroundColor: vars(t).palette.primary.dark,
-          },
-        }),
+        root: ({ theme: t, ownerState }) => {
+          // The darken-on-hover fill only makes sense for a *filled*
+          // default/primary button (the common contained CTA) — it doesn't
+          // even apply to outlined/text buttons visually (there's no fill to
+          // darken), yet this was unconditional, so it leaked a bright
+          // primary-blue hover background onto every button regardless of
+          // variant or explicit colour: an outlined `color="error"` button
+          // hovered blue, same as an outlined "Cancel" button would. Same
+          // fix shape as `outlined` above — only override the default case,
+          // let MUI's own per-variant/per-colour hover styling apply
+          // otherwise (an alpha-tinted hover for outlined/text, that
+          // colour's own `.dark` shade for a differently-coloured contained
+          // button).
+          const hover =
+            ownerState.variant === 'contained' &&
+            (ownerState.color === 'primary' || ownerState.color === 'inherit')
+              ? { backgroundColor: vars(t).palette.primary.dark }
+              : undefined;
+
+          return {
+            borderRadius: radius.md,
+            paddingInline: 14,
+            minHeight: 36,
+            transition: `background-color ${duration.base}ms ${easing.easeInOut}`,
+            ...(hover && { '&:hover': hover }),
+          };
+        },
         sizeSmall: { minHeight: 36, paddingInline: 12 },
         sizeLarge: { minHeight: 42, paddingInline: 20, fontSize: '0.875rem' },
-        outlined: ({ theme: t }) => ({
-          borderColor: vars(t).palette.divider,
-          color: vars(t).palette.text.primary,
-          '&:hover': {
-            borderColor: vars(t).palette.text.disabled,
-            backgroundColor: vars(t).palette.action.hover,
-          },
-        }),
+        outlined: ({ theme: t, ownerState }) => {
+          // Only the default/primary case gets flattened to a muted neutral
+          // outline (the common "Browse…"/"Cancel"-style button, where a
+          // full bright-blue outline would be too loud). An *explicit*
+          // semantic colour — `color="error"` etc. — means the caller wants
+          // that colour to actually show, so this used to silently override
+          // it to the same grey regardless: an outlined error/warning/success
+          // button rendered exactly like a plain neutral one, indistinguishable
+          // from "nothing's wrong." Anything other than 'primary'/'inherit'
+          // returns nothing here instead, letting MUI's own palette-driven
+          // outlined styling for that colour apply normally.
+          if (ownerState.color !== 'primary' && ownerState.color !== 'inherit') return {};
+
+          return {
+            borderColor: vars(t).palette.divider,
+            color: vars(t).palette.text.primary,
+            '&:hover': {
+              borderColor: vars(t).palette.text.disabled,
+              backgroundColor: vars(t).palette.action.hover,
+            },
+          };
+        },
       },
+    },
+    MuiButtonBase: {
+      defaultProps: { disableRipple: true },
     },
     MuiButtonGroup: {
       defaultProps: { disableElevation: true, disableRipple: true, size: 'small' },
     },
     MuiIconButton: {
-      defaultProps: { size: 'small' },
+      defaultProps: { disableRipple: true, size: 'small' },
       styleOverrides: { root: { borderRadius: radius.sm } },
     },
     MuiChip: {
