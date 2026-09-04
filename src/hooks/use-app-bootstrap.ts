@@ -222,6 +222,17 @@ export function useAppBootstrap(): void {
       unsubscribeDiscord = window.kiyro?.discord.onStatus((status) => {
         useDiscordStore.getState().setStatus(status);
       });
+
+      // Catch-up read, for the same reason as `device-store.ts`'s: the
+      // status above is only pushed on change. A renderer that loaded after
+      // Discord was already connected showed "Connect to Discord" for a
+      // live connection, and only corrected itself when some unrelated
+      // status change (pressing a bound Discord key on the pad) finally
+      // pushed one.
+      void window.kiyro?.discord
+        .getStatus()
+        .then((status) => useDiscordStore.getState().setStatus(status))
+        .catch(() => undefined);
     }
 
     return () => {

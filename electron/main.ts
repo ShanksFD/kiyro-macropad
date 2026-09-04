@@ -476,7 +476,10 @@ if (!gotSingleInstanceLock) {
 
     const updater = new AppUpdater(() => mainWindow);
     updater.init();
-    ipcMain.handle(IpcChannel.UpdaterCheck, () => updater.check());
+    // `userInitiated`: this is the Help menu's "Check for Updates…", so an
+    // unreachable network gets reported back rather than silently ignored
+    // the way the background timer's own checks are (see `updater.ts`).
+    ipcMain.handle(IpcChannel.UpdaterCheck, () => updater.check({ userInitiated: true }));
     ipcMain.handle(IpcChannel.UpdaterDownload, () => updater.download());
     ipcMain.handle(IpcChannel.UpdaterQuitAndInstall, () => updater.quitAndInstall());
 
@@ -487,6 +490,13 @@ if (!gotSingleInstanceLock) {
     // that prompt can appear before anyone asked for it.
     ipcMain.handle(IpcChannel.DiscordConnect, () => discordRpcClient.connect().then(() => discordRpcClient.status));
     ipcMain.handle(IpcChannel.DiscordDisconnect, () => discordRpcClient.disconnect());
+    // Same transition-only problem as the device status (see
+    // `ipc-handlers.ts`): `onStatusChange` below fires on changes, so a
+    // renderer that loaded after Discord connected showed "Connect to
+    // Discord" for an already-live connection until the next status change
+    // happened to nudge it — which is why pressing Mute on the pad appeared
+    // to "fix" it.
+    ipcMain.handle(IpcChannel.DiscordGetStatus, () => discordRpcClient.status);
     discordRpcClient.onStatusChange((status) => {
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send(IpcChannel.DiscordStatus, status);

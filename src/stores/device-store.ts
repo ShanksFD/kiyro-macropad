@@ -93,6 +93,18 @@ export function initDeviceStore(): void {
     // for it, so the Connect button should never be disabled on its account.
     useDeviceStore.setState({ webSerialSupported: true });
     window.kiyro?.device.onStatus((payload) => useDeviceStore.setState(fromStatusPayload(payload)));
+    // Subscribing is not enough on its own: main only *pushes* on a state
+    // change, so everything that happened before this store existed is
+    // invisible to it. Without this catch-up read, a window recreated from
+    // the tray (or simply reloaded) came up insisting no macro pad was
+    // connected while the pad kept working perfectly — main had the port
+    // open the whole time, it just had nothing new to announce.
+    void window.kiyro?.device
+      .getStatus()
+      .then((payload) => useDeviceStore.setState(fromStatusPayload(payload)))
+      // An older preload/main without this channel rejects; the pushed
+      // updates above still work, so this is strictly a bonus.
+      .catch(() => undefined);
   } else {
     useDeviceStore.setState({ webSerialSupported: isWebSerialSupported() });
   }

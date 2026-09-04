@@ -20,6 +20,12 @@ export function registerIpcHandlers(pipeline: ExecutionPipeline): void {
     pipeline.start();
   });
 
+  // Answers "what is the connection state right now?" — see
+  // `ExecutionPipeline.deviceStatus`. Without this the renderer only ever
+  // learns about *changes*, so a window recreated from the tray came up
+  // claiming no macro pad was connected while the pad went on working.
+  ipcMain.handle(IpcChannel.DeviceGetStatus, () => pipeline.deviceStatus);
+
   ipcMain.handle(IpcChannel.DisconnectRequest, () => {
     console.log('[kiyro] disconnect requested');
     pipeline.stop();

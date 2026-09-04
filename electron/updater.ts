@@ -82,9 +82,56 @@ interface UpdateAttempt {
   at: string;
 }
 
+/**
+ * A check that failed because the network moved, not because anything is
+ * wrong with Kiyro or the release feed.
+ *
+ * These are unavoidable on a laptop: `ERR_NETWORK_CHANGED` is Chromium
+ * saying the machine switched Wi-Fi/VPN/adapters mid-request, and the rest
+ * are the ordinary offline/asleep/DNS-not-up-yet cases. Kiyro checks every
+ * few hours in the background forever, so *every* user will hit these
+ * routinely — treating them as errors meant a Sentry event and a red
+ * "Update failed" toast for something that fixes itself on the next check
+ * and that the user can do nothing about.
+ *
+ * Matched on the message because that is all there is: electron-updater
+ * wraps the underlying failure in its own `Error` (see the
+ * "Unable to find latest version on GitHub" text), so any error code or
+ * cause on the original is gone by the time it reaches us.
+ */
+const TRANSIENT_NETWORK_ERROR = new RegExp(
+  [
+    'ERR_NETWORK_CHANGED',
+    'ERR_INTERNET_DISCONNECTED',
+    'ERR_NAME_NOT_RESOLVED',
+    'ERR_CONNECTION_RESET',
+    'ERR_CONNECTION_ABORTED',
+    'ERR_CONNECTION_CLOSED',
+    'ERR_CONNECTION_TIMED_OUT',
+    'ERR_CONNECTION_REFUSED',
+    'ERR_ADDRESS_UNREACHABLE',
+    'ERR_PROXY_CONNECTION_FAILED',
+    'ERR_TIMED_OUT',
+    'ENOTFOUND',
+    'ECONNRESET',
+    'ECONNREFUSED',
+    'ETIMEDOUT',
+    'EAI_AGAIN',
+  ].join('|'),
+);
+
+function isTransientNetworkError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return TRANSIENT_NETWORK_ERROR.test(message);
+}
+
 export class AppUpdater {
   #ready = false;
   #status: UpdaterStatusPayload = { state: 'idle' };
+  /** Whether the in-flight check came from the Help menu rather than the background timer — see `#handleOfflineCheck`. */
+  #userInitiatedCheck = false;
+  /** The status to rewind to if the in-flight check can't reach the network. */
+  #statusBeforeCheck: UpdaterStatusPayload = { state: 'idle' };
 
   constructor(private readonly getWindow: () => BrowserWindow | null) {}
 
@@ -156,6 +203,22 @@ export class AppUpdater {
       this.#setStatus({ state: 'downloaded', version: info.version }),
     );
     autoUpdater.on('error', (error) => {
+      // A network blip during a background check is not a failure worth
+      // reporting or interrupting anyone over — it stays in the log only,
+      // and the status is left exactly as it was so the UI doesn't flip to
+      // an error the user can neither act on nor dismiss. A *download* or
+      // *install* failing is different: the user asked for that and is
+      // waiting on it, so it still surfaces even if the cause was the
+      // network.
+      if (
+        isTransientNetworkError(error) &&
+        this.#status.state !== 'downloading' &&
+        this.#status.state !== 'downloaded'
+      ) {
+        this.#handleOfflineCheck(error);
+        return;
+      }
+
       captureError(error, { phase: 'updater', status: this.#status.state });
       this.#setStatus({ state: 'error', message: error.message });
     });
@@ -166,8 +229,16 @@ export class AppUpdater {
   }
 
   /** Read-only: asks GitHub what the latest release is. Never downloads anything by itself. Returns the resulting status so a caller (the Help menu's "Check for Updates…") can show its own immediate feedback instead of racing the broadcast channel. */
-  async check(): Promise<UpdaterStatusPayload> {
+  async check({ userInitiated = false } = {}): Promise<UpdaterStatusPayload> {
     if (!this.#ready) return this.#status;
+
+    // Read by `#handleOfflineCheck` — a network failure is silent for the
+    // background timer but must be *said* when someone clicked the button.
+    this.#userInitiatedCheck = userInitiated;
+    // What to fall back to if this check can't complete, so a failed check
+    // doesn't leave the UI stuck on 'checking' forever, and doesn't claim
+    // "up to date" on the strength of a request that never landed.
+    this.#statusBeforeCheck = this.#status;
 
     // Nothing a check can discover is more useful than an update that's
     // already downloaded and waiting for the user to click restart.
@@ -181,6 +252,11 @@ export class AppUpdater {
       // Already turned into an `error` status by the `'error'` listener
       // above in the normal case; this only catches a check that failed
       // before electron-updater got far enough to emit that event at all.
+      if (isTransientNetworkError(error)) {
+        this.#handleOfflineCheck(error);
+        return this.#status;
+      }
+
       captureError(error, { phase: 'checkForUpdates' });
       this.#setStatus({
         state: 'error',
@@ -324,6 +400,31 @@ export class AppUpdater {
   }
 
   /** Report a refusal the same way a thrown error is reported — logged, sent, and pushed to the UI so the chip can say so. */
+  /**
+   * A check that couldn't reach GitHub. Never a Sentry event and never a
+   * lie: a background check rewinds to whatever the status was before it
+   * started (so the UI is exactly as it was, and the next check in a few
+   * hours tries again), while a check the user explicitly asked for gets a
+   * real answer — "couldn't reach the server" rather than either silence or
+   * a false "you're up to date."
+   */
+  #handleOfflineCheck(error: unknown): void {
+    const detail = error instanceof Error ? error.message : String(error);
+    log.warn(`[kiyro] update check could not reach GitHub — network unavailable: ${detail}`);
+
+    if (this.#userInitiatedCheck) {
+      this.#setStatus({
+        state: 'error',
+        message: 'Could not reach the update server — check your internet connection.',
+      });
+      return;
+    }
+
+    this.#setStatus(
+      this.#statusBeforeCheck.state === 'checking' ? { state: 'idle' } : this.#statusBeforeCheck,
+    );
+  }
+
   #fail(message: string, context: Record<string, unknown>): void {
     captureProblem(`Updater: ${message}`, { ...context, status: this.#status.state });
     this.#setStatus({ state: 'error', message });

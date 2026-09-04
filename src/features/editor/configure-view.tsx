@@ -75,7 +75,11 @@ export function ConfigureView() {
         >
           <FormControlLabel
             control={<Switch checked={testMode} onChange={(_event, on) => setTestMode(on)} />}
-            label={<Typography variant="body2">Test mode</Typography>}
+            label={
+              <Typography variant="body2" sx={{ ml: 2 }}>
+                Test mode
+              </Typography>
+            }
           />
           <Button variant="outlined" startIcon={<UndoIcon />} disabled={!isDirty} onClick={revert}>
             Discard changes

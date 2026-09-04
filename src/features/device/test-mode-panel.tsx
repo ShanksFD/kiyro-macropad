@@ -11,6 +11,7 @@ import type { DeviceDefinition } from '@/lib/devices/types';
 import { useLiveInputStore } from '@/stores/live-input-store';
 import { describeAction } from '@/lib/actions/format';
 import { monoFontFamily } from '@/theme/theme';
+import { Divider } from '@mui/material';
 
 /**
  * Test mode readout.
@@ -47,14 +48,13 @@ export function TestModePanel({ device }: { device: DeviceDefinition }) {
           </Typography>
           <Chip
             size="small"
-            variant="outlined"
             label={last?.resolution.status === 'ambiguous' ? 'Ambiguous event' : 'Listening'}
           />
         </Stack>
 
         {last ? (
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={4}>
-            <Stack sx={{ minWidth: 160 }}>
+          <Stack direction={{ xs: 'column', sm: 'row' }} sx={{ flexWrap: 'wrap' }} spacing={4}>
+            <Stack>
               <Typography variant="caption" color="text.secondary">
                 Raw event
               </Typography>
@@ -62,20 +62,34 @@ export function TestModePanel({ device }: { device: DeviceDefinition }) {
                 {encodeEvent(last.event)}
               </Typography>
             </Stack>
-            <Stack sx={{ minWidth: 200 }}>
+            <Divider
+              orientation="vertical"
+              flexItem
+              sx={{ display: { xs: 'none', sm: 'block' } }}
+            />
+            <Stack>
               <Typography variant="caption" color="text.secondary">
                 Interpreted as
               </Typography>
               <Typography sx={{ fontWeight: 600 }}>{describeEvent(last.event)}</Typography>
             </Stack>
+            <Divider
+              orientation="vertical"
+              flexItem
+              sx={{ display: { xs: 'none', sm: 'block' } }}
+            />
             <Stack>
               <Typography variant="caption" color="text.secondary">
                 Control
               </Typography>
               <Typography sx={{ fontWeight: 600 }}>{resolvedLabel}</Typography>
             </Stack>
-
-            <Stack sx={{ minWidth: 200 }}>
+            <Divider
+              orientation="vertical"
+              flexItem
+              sx={{ display: { xs: 'none', sm: 'block' } }}
+            />
+            <Stack>
               <Typography variant="caption" color="text.secondary">
                 Bound action
               </Typography>

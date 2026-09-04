@@ -20,6 +20,7 @@ import type { Preferences } from '../preferences/schema';
  */
 export const IpcChannel = {
   DeviceStatus: 'kiyro:device-status',
+  DeviceGetStatus: 'kiyro:device:get-status',
   DeviceEvent: 'kiyro:device-event',
   ExecutionOutcome: 'kiyro:execution-outcome',
   ConnectRequest: 'kiyro:connect-request',
@@ -53,6 +54,7 @@ export const IpcChannel = {
   DiscordConnect: 'kiyro:discord:connect',
   DiscordDisconnect: 'kiyro:discord:disconnect',
   DiscordStatus: 'kiyro:discord:status',
+  DiscordGetStatus: 'kiyro:discord:get-status',
 } as const;
 
 /**
@@ -165,6 +167,14 @@ export interface KiyroBridge {
   device: {
     connect(): Promise<void>;
     disconnect(): Promise<void>;
+    /**
+     * The connection state *right now*, rather than waiting for the next
+     * change. `onStatus` below only fires on transitions, so a renderer that
+     * starts up (or is recreated after the window was closed to the tray)
+     * mid-session would otherwise sit on its default "disconnected" forever
+     * while the pad kept working perfectly.
+     */
+    getStatus(): Promise<DeviceStatusPayload>;
     onStatus(callback: (payload: DeviceStatusPayload) => void): () => void;
     onEvent(callback: (payload: DeviceEventPayload) => void): () => void;
     onExecutionOutcome(callback: (payload: ExecutionOutcomePayload) => void): () => void;
@@ -260,6 +270,8 @@ export interface KiyroBridge {
     connect(): Promise<DiscordStatusPayload>;
     /** Closes the live connection without forgetting Kiyro's saved authorization — a later `connect()` (or a bound action) silently reconnects with no new approval prompt. */
     disconnect(): Promise<void>;
+    /** Current state, for the same reason as `device.getStatus()` — `onStatus` is transition-only, so a fresh renderer needs to ask. */
+    getStatus(): Promise<DiscordStatusPayload>;
     onStatus(callback: (payload: DiscordStatusPayload) => void): () => void;
   };
   /** So the renderer can lay out its own title bar around the OS's caption buttons/traffic lights, which sit on opposite sides. */

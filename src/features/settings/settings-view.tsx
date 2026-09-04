@@ -250,18 +250,24 @@ export function SettingsView() {
           >
             <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
               <Chip
-                icon={<BrandDiscordIcon sx={{ fontSize: 14 }} />}
+                icon={
+                  <BrandDiscordIcon
+                    color={discordStatus.state === 'connected' ? 'success' : undefined}
+                    sx={{ fontSize: 14 }}
+                  />
+                }
                 label={discordStatusLabel(discordStatus)}
                 color={
                   discordStatus.state === 'connected'
-                    ? 'primary'
+                    ? 'default'
                     : discordStatus.state === 'error'
                       ? 'error'
                       : 'default'
                 }
-                variant={discordStatus.state === 'connected' ? 'filled' : 'outlined'}
+                variant={'outlined'}
                 sx={{
                   borderWidth: 0,
+                  color: discordStatus.state === 'connected' ? 'success.main' : undefined,
                 }}
               />
               <Button

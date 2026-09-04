@@ -68,11 +68,31 @@ function isSupported(): boolean {
   return app.isPackaged && (process.platform === 'win32' || process.platform === 'darwin');
 }
 
+/**
+ * MUST be passed to every `getLoginItemSettings` call, not just the `set`.
+ *
+ * On Windows `getLoginItemSettings` does not report "is anything registered
+ * for this app" — it compares the registry entry against a path and an
+ * argument list, and those default to `process.execPath` and **an empty
+ * array**. Since `setStartupEnabled` registers with `--hidden`, a bare
+ * `getLoginItemSettings()` compared our real entry against a no-args one,
+ * failed to match, and returned `openAtLogin: false` for an entry that was
+ * sitting right there in Task Manager working correctly at every sign-in.
+ *
+ * The visible symptom was a Settings switch stuck OFF that did nothing when
+ * clicked: `setStartupEnabled` wrote the (already correct) entry, then read
+ * it back through the same mismatched comparison and reported `false` again,
+ * so the UI dutifully snapped back off.
+ */
+function loginItemQuery(): { path: string; args: string[] } {
+  return { path: process.execPath, args: [HIDDEN_ARG] };
+}
+
 export function getStartupStatus(): StartupStatus {
   if (!isSupported()) return { supported: false, enabled: false, blockedBySystem: false };
 
   try {
-    const settings = app.getLoginItemSettings();
+    const settings = app.getLoginItemSettings(loginItemQuery());
 
     if (process.platform !== 'win32') {
       return { supported: true, enabled: settings.openAtLogin, blockedBySystem: false };
@@ -181,7 +201,7 @@ export function applyFirstRunStartupDefault(): void {
   }
 
   try {
-    if (app.getLoginItemSettings().openAtLogin) {
+    if (app.getLoginItemSettings(loginItemQuery()).openAtLogin) {
       log.info('[kiyro] first run: login item already registered, leaving it alone');
       return;
     }
@@ -209,7 +229,7 @@ export function reconcileStartupPath(): void {
   if (!isSupported() || process.platform !== 'win32') return;
 
   try {
-    const settings = app.getLoginItemSettings();
+    const settings = app.getLoginItemSettings(loginItemQuery());
     if (!settings.openAtLogin) return;
 
     const entry = settings.launchItems?.find((item) => item.name === LOGIN_ITEM_NAME);

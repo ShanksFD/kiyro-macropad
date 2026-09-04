@@ -30,6 +30,7 @@ import type { Preferences } from '../src/lib/preferences/schema';
 
 const Channel = {
   DeviceStatus: 'kiyro:device-status',
+  DeviceGetStatus: 'kiyro:device:get-status',
   DeviceEvent: 'kiyro:device-event',
   ExecutionOutcome: 'kiyro:execution-outcome',
   ConnectRequest: 'kiyro:connect-request',
@@ -63,6 +64,7 @@ const Channel = {
   DiscordConnect: 'kiyro:discord:connect',
   DiscordDisconnect: 'kiyro:discord:disconnect',
   DiscordStatus: 'kiyro:discord:status',
+  DiscordGetStatus: 'kiyro:discord:get-status',
 } as const;
 
 function on<T>(channel: string, callback: (payload: T) => void): () => void {
@@ -75,6 +77,7 @@ const kiyroBridge: KiyroBridge = {
   device: {
     connect: (): Promise<void> => ipcRenderer.invoke(Channel.ConnectRequest),
     disconnect: (): Promise<void> => ipcRenderer.invoke(Channel.DisconnectRequest),
+    getStatus: (): Promise<DeviceStatusPayload> => ipcRenderer.invoke(Channel.DeviceGetStatus),
     onStatus: (callback: (payload: DeviceStatusPayload) => void) => on(Channel.DeviceStatus, callback),
     onEvent: (callback: (payload: DeviceEventPayload) => void) => on(Channel.DeviceEvent, callback),
     onExecutionOutcome: (callback: (payload: ExecutionOutcomePayload) => void) =>
@@ -130,6 +133,7 @@ const kiyroBridge: KiyroBridge = {
   discord: {
     connect: (): Promise<DiscordStatusPayload> => ipcRenderer.invoke(Channel.DiscordConnect),
     disconnect: (): Promise<void> => ipcRenderer.invoke(Channel.DiscordDisconnect),
+    getStatus: (): Promise<DiscordStatusPayload> => ipcRenderer.invoke(Channel.DiscordGetStatus),
     onStatus: (callback: (payload: DiscordStatusPayload) => void) =>
       on(Channel.DiscordStatus, callback),
   },

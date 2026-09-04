@@ -173,8 +173,7 @@ export function KeyCap({ button, action, selected, showEventCode, onSelect }: Pr
               boxShadow: selectedShadow,
             }),
             ...(live && {
-              bgcolor: 'device.keycapLive',
-              color: 'primary.contrastText',
+              bgcolor: PRESSED_BG[accent],
               transform: 'translateY(5px)',
               boxShadow: pressedShadow,
             }),

@@ -37,16 +37,27 @@ export class ExecutionPipeline {
   readonly bridge = new SerialBridge();
   readonly profiles = new ActiveProfileStore();
 
+  /**
+   * The same payload `onStateChange` broadcasts, but on demand. Pushed
+   * status is transition-only and `webContents.send` to a window that isn't
+   * listening yet just evaporates, so a renderer created or reloaded
+   * mid-session has no way to learn a connection that happened before it
+   * existed. `IpcChannel.DeviceGetStatus` hands it this instead.
+   */
+  get deviceStatus(): DeviceStatusPayload {
+    const state = this.bridge.state;
+    return {
+      status: state.status,
+      deviceId: state.deviceId,
+      portInfo: state.portInfo,
+      error: state.error,
+      latencyMs: state.latencyMs,
+    };
+  }
+
   constructor(private readonly getWindow: () => BrowserWindow | null) {
-    this.bridge.onStateChange((state) => {
-      const payload: DeviceStatusPayload = {
-        status: state.status,
-        deviceId: state.deviceId,
-        portInfo: state.portInfo,
-        error: state.error,
-        latencyMs: state.latencyMs,
-      };
-      this.#send(IpcChannel.DeviceStatus, payload);
+    this.bridge.onStateChange(() => {
+      this.#send(IpcChannel.DeviceStatus, this.deviceStatus);
     });
 
     this.bridge.onEvent((event) => {
