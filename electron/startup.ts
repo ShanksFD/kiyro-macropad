@@ -16,11 +16,12 @@
  * Disabling in Task Manager does NOT delete the Run entry: Windows records
  * the veto separately, under
  * `HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run`.
- * That's why `openAtLogin` alone is not the answer to "will this actually
- * start?" — it stays `true` for an entry Task Manager has switched off.
- * `executableWillLaunchAtLogin` is the flag that accounts for the veto, and
- * the gap between the two is reported as `blockedBySystem` below so the UI
- * can say so rather than showing a toggle that lies.
+ * So "is there an entry?" and "will it actually run?" are two different
+ * questions, and the gap between them is reported as `blockedBySystem`
+ * below so the UI can say so rather than showing a toggle that lies. Both
+ * answers come from the `launchItems` list rather than from `openAtLogin`
+ * or `executableWillLaunchAtLogin` — see `findLoginItem` for why those two
+ * cannot be trusted here.
  */
 
 import { app } from 'electron';
@@ -69,23 +70,43 @@ function isSupported(): boolean {
 }
 
 /**
- * MUST be passed to every `getLoginItemSettings` call, not just the `set`.
- *
- * On Windows `getLoginItemSettings` does not report "is anything registered
- * for this app" — it compares the registry entry against a path and an
- * argument list, and those default to `process.execPath` and **an empty
- * array**. Since `setStartupEnabled` registers with `--hidden`, a bare
- * `getLoginItemSettings()` compared our real entry against a no-args one,
- * failed to match, and returned `openAtLogin: false` for an entry that was
- * sitting right there in Task Manager working correctly at every sign-in.
- *
- * The visible symptom was a Settings switch stuck OFF that did nothing when
- * clicked: `setStartupEnabled` wrote the (already correct) entry, then read
- * it back through the same mismatched comparison and reported `false` again,
- * so the UI dutifully snapped back off.
+ * Passed to `getLoginItemSettings` so its `openAtLogin` has the best chance
+ * of being meaningful — but nothing below *relies* on that field any more.
+ * See `findLoginItem`.
  */
 function loginItemQuery(): { path: string; args: string[] } {
   return { path: process.execPath, args: [HIDDEN_ARG] };
+}
+
+/**
+ * The registry entry Kiyro owns, found by NAME — which is the only stable
+ * way to ask "are we registered?" on Windows.
+ *
+ * `openAtLogin` cannot answer that question. It is not a flag Windows
+ * stores; Electron synthesises it by rebuilding the command line it would
+ * have written (`"<path>" <args>`) and string-comparing that against the
+ * value actually in the registry. Any difference at all — quoting,
+ * argument spacing, the path's capitalisation, an entry written by an
+ * older build or by the installer — makes it report `false` for an entry
+ * that is present and working. That is what happened here: the `Run\Kiyro`
+ * value was correct and Kiyro really did launch at sign-in, while the app
+ * insisted startup was off.
+ *
+ * The visible bug was a switch that wouldn't stay on. `setStartupEnabled`
+ * wrote the (already correct) entry, read it back through the same failing
+ * comparison, reported `false`, and the UI honestly reflected that by
+ * snapping off — twice in 0.6s in the log, once per click.
+ *
+ * `launchItems` is the real data: Windows' own list of `Run` entries, each
+ * with the name it appears under in Task Manager. Matching on that compares
+ * the one thing we control and Windows preserves verbatim.
+ */
+function findLoginItem(settings: Electron.LoginItemSettings): Electron.LaunchItems | undefined {
+  // `launchItems` is typed as always present but is only ever populated on
+  // Windows, so this stays optional-chained.
+  return settings.launchItems?.find(
+    (item) => item.name?.toLowerCase() === LOGIN_ITEM_NAME.toLowerCase(),
+  );
 }
 
 export function getStartupStatus(): StartupStatus {
@@ -98,10 +119,18 @@ export function getStartupStatus(): StartupStatus {
       return { supported: true, enabled: settings.openAtLogin, blockedBySystem: false };
     }
 
+    // Presence of the entry is "registered"; its `enabled` is Windows'
+    // own verdict, which already accounts for the separate Task Manager
+    // veto record (`StartupApproved\Run`) — the same thing
+    // `executableWillLaunchAtLogin` reports, but without depending on the
+    // command-line comparison that `openAtLogin` is built on.
+    const entry = findLoginItem(settings);
+    if (!entry) return { supported: true, enabled: false, blockedBySystem: false };
+
     return {
       supported: true,
-      enabled: settings.openAtLogin,
-      blockedBySystem: settings.openAtLogin && !settings.executableWillLaunchAtLogin,
+      enabled: true,
+      blockedBySystem: entry.enabled === false,
     };
   } catch (error) {
     // Reading the registry should not be able to take the app down with it.
@@ -201,7 +230,7 @@ export function applyFirstRunStartupDefault(): void {
   }
 
   try {
-    if (app.getLoginItemSettings(loginItemQuery()).openAtLogin) {
+    if (findLoginItem(app.getLoginItemSettings(loginItemQuery()))) {
       log.info('[kiyro] first run: login item already registered, leaving it alone');
       return;
     }
@@ -230,9 +259,7 @@ export function reconcileStartupPath(): void {
 
   try {
     const settings = app.getLoginItemSettings(loginItemQuery());
-    if (!settings.openAtLogin) return;
-
-    const entry = settings.launchItems?.find((item) => item.name === LOGIN_ITEM_NAME);
+    const entry = findLoginItem(settings);
     if (!entry) return;
 
     const pathIsCurrent = entry.path?.toLowerCase() === process.execPath.toLowerCase();

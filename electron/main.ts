@@ -62,6 +62,7 @@ import { createTray, setTrayConnected } from './tray';
 import { ExecutionPipeline } from './execution-pipeline';
 import { registerIpcHandlers } from './ipc-handlers';
 import { discordRpcClient } from './discord-rpc';
+import { discordTokenStorage } from './discord-token-storage';
 import { AppUpdater } from './updater';
 import {
   applyFirstRunStartupDefault,
@@ -132,6 +133,46 @@ protocol.registerSchemesAsPrivileged([
  * left at its default `false`), and asset paths already carry a real
  * extension, so only extension-less pathnames need `.html` appended.
  */
+/**
+ * Content types for everything served over `app://`.
+ *
+ * `net.fetch` of a `file://` URL does not reliably label what it returns,
+ * and one of these labels is load-bearing rather than cosmetic: `.txt`.
+ *
+ * Next's static export writes each route's RSC payload next to its HTML as
+ * `<route>.txt`, and that is what the App Router fetches on a client-side
+ * navigation. Before using it, the router checks the content type
+ * (`fetch-server-response.js`) and accepts only `text/x-component` — or,
+ * for `output: 'export'` builds specifically, `text/plain`. Anything else,
+ * including a missing content type, is treated as "not a flight response"
+ * and it falls back to `doMpaNavigation`: a full document load.
+ *
+ * That is exactly what was happening. Every sidebar click tore the renderer
+ * down and rebuilt it, which is visible in the log as a `did-finish-load`
+ * per navigation, and visible in the UI as the whole app remounting — the
+ * device chip dropping to "disconnected" and reconnecting each time you
+ * moved between Configure, Profiles and Settings.
+ */
+const CONTENT_TYPES: Record<string, string> = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.mjs': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.txt': 'text/x-component; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.ico': 'image/x-icon',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+  '.ttf': 'font/ttf',
+  '.otf': 'font/otf',
+};
+
 function resolveOutPath(pathname: string): string {
   const decoded = decodeURIComponent(pathname);
   if (decoded === '/' || decoded === '') return 'index.html';
@@ -383,10 +424,25 @@ if (!gotSingleInstanceLock) {
     // Only ever hit for a packaged build (`app://kiyro/...`, per `loadURL`
     // above) — dev mode loads `http://localhost:3000` directly and never
     // touches this handler.
-    protocol.handle(APP_SCHEME, (request) => {
+    protocol.handle(APP_SCHEME, async (request) => {
       const url = new URL(request.url);
-      const filePath = path.join(OUT_DIR, resolveOutPath(url.pathname));
-      return net.fetch(pathToFileURL(filePath).toString());
+      const relativePath = resolveOutPath(url.pathname);
+      const filePath = path.join(OUT_DIR, relativePath);
+      const response = await net.fetch(pathToFileURL(filePath).toString());
+
+      // Re-label with a content type we chose rather than whatever the
+      // file:// fetch inferred — see `CONTENT_TYPES`. Unknown extensions
+      // pass through untouched.
+      const contentType = CONTENT_TYPES[path.extname(relativePath).toLowerCase()];
+      if (!contentType) return response;
+
+      const headers = new Headers(response.headers);
+      headers.set('content-type', contentType);
+      return new Response(response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers,
+      });
     });
 
     // No visible menu bar at all on Windows/Linux (the in-page one covers
@@ -483,11 +539,31 @@ if (!gotSingleInstanceLock) {
     ipcMain.handle(IpcChannel.UpdaterDownload, () => updater.download());
     ipcMain.handle(IpcChannel.UpdaterQuitAndInstall, () => updater.quitAndInstall());
 
-    // No `.connect()` call here on purpose, unlike the updater above — a
-    // bound `discord` action connects (and, the first time, shows Discord's
-    // consent prompt) lazily on its own when actually pressed
-    // (`execution-pipeline.ts`). Auto-connecting at every launch would mean
-    // that prompt can appear before anyone asked for it.
+    // Reconnects at launch, but ONLY if Discord was authorized before.
+    //
+    // The rule this preserves is "never make a consent prompt appear that
+    // nobody asked for": a *fresh* authorization opens a dialog inside
+    // Discord, so that still only ever happens when someone presses a bound
+    // `discord` action or the Connect button (`execution-pipeline.ts`).
+    // Reusing tokens already on disk is silent — `#authorizeSession` only
+    // falls through to `#authorizeFresh` when there is nothing stored — so
+    // there is no prompt to avoid here, and skipping the reconnect bought
+    // nothing while costing correctness: the status genuinely stayed
+    // `disconnected` for an account that was authorized, the Settings page
+    // truthfully showed "Connect to Discord", and the connection only
+    // appeared once the user happened to press Mute on the pad and trip the
+    // lazy path.
+    void discordTokenStorage
+      .get()
+      .then((tokens) => {
+        if (!tokens) return;
+        log.info('[kiyro] Discord was authorized previously — reconnecting');
+        return discordRpcClient.connect();
+      })
+      // Discord not running is the ordinary case, not a failure: `connect()`
+      // reports that through its own status (`unavailable`), and anything
+      // else it throws is already logged there.
+      .catch(() => undefined);
     ipcMain.handle(IpcChannel.DiscordConnect, () => discordRpcClient.connect().then(() => discordRpcClient.status));
     ipcMain.handle(IpcChannel.DiscordDisconnect, () => discordRpcClient.disconnect());
     // Same transition-only problem as the device status (see
