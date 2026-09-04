@@ -148,6 +148,17 @@ function defaultAppliedMarkerPath(): string {
  * is left exactly as the user left it.
  */
 export function applyFirstRunStartupDefault(): void {
+  // MUST come before the marker is written, not after the way it used to.
+  // `userData` is shared between a dev run and the installed build on
+  // Windows: `package.json`'s `name` ("kiyro") names the dev directory and
+  // `productName` ("Kiyro") the packaged one, and NTFS is case-insensitive,
+  // so both are `%APPDATA%\Kiyro`. Writing the marker first meant any
+  // `electron:dev` session — where `isSupported()` is false and nothing is
+  // ever registered — silently burned the packaged app's one and only
+  // chance to apply this default, and the installed build then started up
+  // with no login item and no entry in Task Manager's Startup tab at all.
+  if (!isSupported()) return;
+
   const marker = defaultAppliedMarkerPath();
 
   try {
@@ -168,8 +179,6 @@ export function applyFirstRunStartupDefault(): void {
     log.error('[kiyro] could not record the startup default marker:', error);
     return;
   }
-
-  if (!isSupported()) return;
 
   try {
     if (app.getLoginItemSettings().openAtLogin) {

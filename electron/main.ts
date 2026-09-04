@@ -349,13 +349,26 @@ if (!gotSingleInstanceLock) {
     //
     // MUI/Emotion inject `<style>` tags at runtime (CSS-in-JS, no nonce
     // wiring in this app), hence `style-src 'unsafe-inline'` in both modes —
-    // that one isn't a dev-only allowance. `script-src` is the one that
-    // actually differs: only Next's dev server (Turbopack's HMR/module
-    // runtime) needs `unsafe-eval`, and only dev needs `connect-src` to
-    // reach `localhost:3000` itself for the HMR websocket. A packaged build
-    // loads everything from `app://` and needs neither.
+    // that one isn't a dev-only allowance.
+    //
+    // `script-src 'unsafe-inline'` is likewise required in BOTH modes, and
+    // this is not a leftover from the dev policy: Next's static export
+    // (`output: 'export'`) emits the hydration payload as inline
+    // `<script>self.__next_f.push(...)</script>` tags in every exported
+    // HTML file. Without `'unsafe-inline'` Chromium refuses to execute
+    // them, React never hydrates, and the packaged app renders a dead
+    // shell — no in-page View/Help menu, no working device controls, and a
+    // minified React #412 in the console. There is no nonce to use here
+    // (nothing serves these pages at runtime; they're files on disk) and
+    // hashing is not viable either, since the digests change with every
+    // build and differ per page.
+    //
+    // `unsafe-eval` is the one that genuinely differs: only Next's dev
+    // server (Turbopack's HMR/module runtime) needs it, as does dev-only
+    // `connect-src` for the HMR websocket on localhost:3000. A packaged
+    // build loads everything from `app://` and needs neither.
     const CONTENT_SECURITY_POLICY = app.isPackaged
-      ? "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'"
+      ? "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'"
       : "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' ws://localhost:3000 http://localhost:3000; object-src 'none'; base-uri 'self'";
 
     session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
