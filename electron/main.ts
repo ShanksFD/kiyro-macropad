@@ -36,7 +36,7 @@
  * first instance to show its window instead.
  */
 
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, net, protocol, session } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, session } from 'electron';
 // First import with a side effect, and deliberately so: this installs the
 // log file and the crash reporter before any other module gets a chance to
 // throw. Anything that fails during startup below is only diagnosable on
@@ -56,8 +56,8 @@ import { captureError, initObservability, log } from './observability';
 if (!app.isPackaged) process.env['ELECTRON_DISABLE_SECURITY_WARNINGS'] = 'true';
 import type { Tray } from 'electron';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
 import { buildMacAppMenu, showAboutDialog } from './menu';
+import { startLocalServer } from './local-server';
 import { createTray, setTrayConnected } from './tray';
 import { ExecutionPipeline } from './execution-pipeline';
 import { registerIpcHandlers } from './ipc-handlers';
@@ -78,7 +78,6 @@ import type { ShortcutCaptureUpdate } from '../src/lib/electron/ipc-types';
 // Straight to Configure — there's no separate home/landing page (see the
 // packaged-build branch of `createWindow()` below for the full reasoning).
 const DEV_SERVER_URL = 'http://localhost:3000/configure';
-const APP_SCHEME = 'app';
 const OUT_DIR = path.join(__dirname, '../../out');
 const ASSETS_DIR = path.join(__dirname, '../../electron/assets');
 
@@ -115,72 +114,6 @@ const DEFAULT_TITLE_BAR_OVERLAY = {
   symbolColor: '#EAEDF1',
 };
 
-// Must be called before `app` is ready. `standard: true` is what makes
-// root-absolute paths (`/_next/...`) resolve against this scheme's origin
-// instead of erroring — the same behaviour `http://` gives Next's static
-// export for free.
-protocol.registerSchemesAsPrivileged([
-  {
-    scheme: APP_SCHEME,
-    privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true },
-  },
-]);
-
-/**
- * Maps a request pathname onto a file in `out/`. The static export writes
- * each route as a flat `<route>.html` (e.g. `out/configure.html`, not
- * `out/configure/index.html` — see `next.config.ts`, `trailingSlash` is
- * left at its default `false`), and asset paths already carry a real
- * extension, so only extension-less pathnames need `.html` appended.
- */
-/**
- * Content types for everything served over `app://`.
- *
- * `net.fetch` of a `file://` URL does not reliably label what it returns,
- * and one of these labels is load-bearing rather than cosmetic: `.txt`.
- *
- * Next's static export writes each route's RSC payload next to its HTML as
- * `<route>.txt`, and that is what the App Router fetches on a client-side
- * navigation. Before using it, the router checks the content type
- * (`fetch-server-response.js`) and accepts only `text/x-component` — or,
- * for `output: 'export'` builds specifically, `text/plain`. Anything else,
- * including a missing content type, is treated as "not a flight response"
- * and it falls back to `doMpaNavigation`: a full document load.
- *
- * That is exactly what was happening. Every sidebar click tore the renderer
- * down and rebuilt it, which is visible in the log as a `did-finish-load`
- * per navigation, and visible in the UI as the whole app remounting — the
- * device chip dropping to "disconnected" and reconnecting each time you
- * moved between Configure, Profiles and Settings.
- */
-const CONTENT_TYPES: Record<string, string> = {
-  '.html': 'text/html; charset=utf-8',
-  '.js': 'text/javascript; charset=utf-8',
-  '.mjs': 'text/javascript; charset=utf-8',
-  '.css': 'text/css; charset=utf-8',
-  '.json': 'application/json; charset=utf-8',
-  '.txt': 'text/x-component; charset=utf-8',
-  '.svg': 'image/svg+xml',
-  '.png': 'image/png',
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.gif': 'image/gif',
-  '.webp': 'image/webp',
-  '.ico': 'image/x-icon',
-  '.woff': 'font/woff',
-  '.woff2': 'font/woff2',
-  '.ttf': 'font/ttf',
-  '.otf': 'font/otf',
-};
-
-function resolveOutPath(pathname: string): string {
-  const decoded = decodeURIComponent(pathname);
-  if (decoded === '/' || decoded === '') return 'index.html';
-  const trimmed = decoded.replace(/^\/+/, '');
-  const lastSegment = trimmed.split('/').pop() ?? '';
-  return lastSegment.includes('.') ? trimmed : `${trimmed}.html`;
-}
-
 /**
  * Set by the login item `electron/startup.ts` registers, which always passes
  * `--hidden`: someone signing in wants the macro pad working, not a window
@@ -191,6 +124,10 @@ function resolveOutPath(pathname: string): string {
  * key press doing nothing. Only `show()` is skipped.
  */
 const START_HIDDEN = process.argv.includes('--hidden');
+
+// Set once `startLocalServer()` resolves, before the packaged branch of
+// `createWindow()` ever runs — see that call site and `local-server.ts`.
+let localServerPort: number | null = null;
 
 let mainWindow: BrowserWindow | null = null;
 // Held for the app's whole lifetime: an unreferenced `Tray` is liable to be
@@ -325,7 +262,10 @@ async function createWindow(): Promise<void> {
     // Straight to Configure — there's no separate home/landing page
     // (`src/app/page.tsx` just redirects here too, for the rare direct
     // browser visit outside Electron); this skips that hop entirely.
-    await window.loadURL(`${APP_SCHEME}://kiyro/configure.html`);
+    // `localServerPort` is set by `app.whenReady()` before this ever runs
+    // (see below) — see `local-server.ts` for why this is `http://` rather
+    // than a custom protocol.
+    await window.loadURL(`http://127.0.0.1:${localServerPort}/configure`);
   } else {
     await loadDevServer(window);
   }
@@ -368,7 +308,7 @@ if (!gotSingleInstanceLock) {
     else void createWindow();
   });
 
-  app.whenReady().then(() => {
+  app.whenReady().then(async () => {
     // Dev mode on macOS runs the stock Electron binary, which has no dock
     // icon of its own — a packaged build gets this for free from the
     // bundled `.icns` (`build.mac.icon`, package.json) instead.
@@ -383,10 +323,8 @@ if (!gotSingleInstanceLock) {
     // true, but only because Electron stops *checking* in production, not
     // because a packaged build has a policy either. Applied at the session
     // level so it covers every response: both `http://localhost:3000` in
-    // dev and the `app://` custom protocol in a packaged build — responses
-    // from `protocol.handle` below still pass through `webRequest` the same
-    // way ordinary network responses do, since Electron 20's protocol
-    // overhaul routes custom protocols through the same network stack.
+    // dev and the local loopback server (`local-server.ts`) in a packaged
+    // build.
     //
     // MUI/Emotion inject `<style>` tags at runtime (CSS-in-JS, no nonce
     // wiring in this app), hence `style-src 'unsafe-inline'` in both modes —
@@ -407,7 +345,7 @@ if (!gotSingleInstanceLock) {
     // `unsafe-eval` is the one that genuinely differs: only Next's dev
     // server (Turbopack's HMR/module runtime) needs it, as does dev-only
     // `connect-src` for the HMR websocket on localhost:3000. A packaged
-    // build loads everything from `app://` and needs neither.
+    // build loads everything from the loopback server and needs neither.
     const CONTENT_SECURITY_POLICY = app.isPackaged
       ? "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'"
       : "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' ws://localhost:3000 http://localhost:3000; object-src 'none'; base-uri 'self'";
@@ -421,29 +359,17 @@ if (!gotSingleInstanceLock) {
       });
     });
 
-    // Only ever hit for a packaged build (`app://kiyro/...`, per `loadURL`
-    // above) — dev mode loads `http://localhost:3000` directly and never
-    // touches this handler.
-    protocol.handle(APP_SCHEME, async (request) => {
-      const url = new URL(request.url);
-      const relativePath = resolveOutPath(url.pathname);
-      const filePath = path.join(OUT_DIR, relativePath);
-      const response = await net.fetch(pathToFileURL(filePath).toString());
-
-      // Re-label with a content type we chose rather than whatever the
-      // file:// fetch inferred — see `CONTENT_TYPES`. Unknown extensions
-      // pass through untouched.
-      const contentType = CONTENT_TYPES[path.extname(relativePath).toLowerCase()];
-      if (!contentType) return response;
-
-      const headers = new Headers(response.headers);
-      headers.set('content-type', contentType);
-      return new Response(response.body, {
-        status: response.status,
-        statusText: response.statusText,
-        headers,
-      });
-    });
+    // Packaged builds serve `out/` over a loopback-only HTTP server rather
+    // than a custom protocol — see `local-server.ts` for why (in short:
+    // Chromium refuses `fetch()` to a custom scheme outright, which broke
+    // every client-side navigation Next's App Router does). Started before
+    // `createWindow()` below so `localServerPort` is set by the time its
+    // packaged-build branch reads it. Dev mode never touches this — it
+    // loads `http://localhost:3000` directly.
+    if (app.isPackaged) {
+      const { port } = await startLocalServer(OUT_DIR);
+      localServerPort = port;
+    }
 
     // No visible menu bar at all on Windows/Linux (the in-page one covers
     // View/Help); macOS keeps the bare minimum its system menu bar needs —
