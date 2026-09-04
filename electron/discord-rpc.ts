@@ -107,6 +107,7 @@ interface VoiceSettings {
   mute: boolean;
   deaf: boolean;
   input: { volume: number };
+  output: { volume: number };
 }
 
 interface PendingCommand {
@@ -496,6 +497,26 @@ export class DiscordRpcClient {
     const clampedStep = Math.min(100, Math.max(1, Math.trunc(step)));
     const next = Math.min(100, Math.max(0, current.input.volume + direction * clampedStep));
     await this.#setVoiceSettings({ input: { volume: next } });
+  }
+
+  /**
+   * Same shape as `adjustMicVolume`, but for `output` — Discord's own
+   * "Output Volume" slider (how loud everyone else in the call sounds),
+   * separate from Windows' own per-app volume mixer.
+   *
+   * Clamped to 0–100 like the mic side, even though Discord's UI allows
+   * boosting output up to 200%: 0–100 is the range every user actually
+   * expects a "volume" step to move within, and a boosted value arrived at
+   * by holding a button down is more likely a misclick than something
+   * anyone actually wants blasted into their ears.
+   */
+  async adjustOutputVolume(direction: 1 | -1, step: number): Promise<void> {
+    await this.connect();
+    if (this.#status.state !== 'connected') throw new Error(`Discord not connected (${this.#status.state})`);
+    const current = await this.#getVoiceSettings();
+    const clampedStep = Math.min(100, Math.max(1, Math.trunc(step)));
+    const next = Math.min(100, Math.max(0, current.output.volume + direction * clampedStep));
+    await this.#setVoiceSettings({ output: { volume: next } });
   }
 }
 

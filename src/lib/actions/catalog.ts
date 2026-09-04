@@ -213,6 +213,8 @@ export const DISCORD_LABELS: Record<DiscordCommand, string> = {
   toggleDeafen: 'Toggle Deafen',
   micVolumeUp: 'Mic Volume Up',
   micVolumeDown: 'Mic Volume Down',
+  outputVolumeUp: 'Output Volume Up',
+  outputVolumeDown: 'Output Volume Down',
 };
 
 /** Sensible starting point when a user switches an action to a new type. */

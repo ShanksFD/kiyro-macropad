@@ -49,10 +49,19 @@ export type ProfileCommand = (typeof PROFILE_COMMANDS)[number];
  * `toggleDeafen` flip whatever the current state is (Discord's API takes an
  * explicit boolean, so the toggle itself is Kiyro reading the current state
  * first); `micVolumeUp`/`micVolumeDown` step Discord's own input-volume
- * slider, separate from — and not the same thing as — the OS-level `volume`
- * action above.
+ * slider (how loud you sound to others) and `outputVolumeUp`/
+ * `outputVolumeDown` step its output-volume slider (how loud everyone else
+ * sounds to you) — both separate from, and not the same thing as, the
+ * OS-level `volume` action above, which controls Windows' own mixer instead.
  */
-export const DISCORD_COMMANDS = ['toggleMute', 'toggleDeafen', 'micVolumeUp', 'micVolumeDown'] as const;
+export const DISCORD_COMMANDS = [
+  'toggleMute',
+  'toggleDeafen',
+  'micVolumeUp',
+  'micVolumeDown',
+  'outputVolumeUp',
+  'outputVolumeDown',
+] as const;
 export type DiscordCommand = (typeof DISCORD_COMMANDS)[number];
 
 /**
@@ -88,10 +97,10 @@ export type Action =
    * `electron/execution-pipeline.ts` rather than the OS-level executor,
    * since it talks to Discord over IPC instead of pressing anything.
    *
-   * `step` only means anything for `micVolumeUp`/`micVolumeDown` (ignored
+   * `step` only means anything for the four volume commands (ignored
    * otherwise) — and unlike the OS `volume` action's `step`, this is a
-   * direct percentage of Discord's own 0–100 input-volume slider, not a
-   * count of hardware notches: `step: 10` moves it by 10%.
+   * direct percentage of Discord's own 0–100 input/output-volume slider, not
+   * a count of hardware notches: `step: 10` moves it by 10%.
    */
   | { type: 'discord'; command: DiscordCommand; step?: number }
   /**

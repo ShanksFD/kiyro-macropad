@@ -153,6 +153,18 @@ export const ACTION_PRESETS: readonly ActionPreset[] = [
     { type: 'discord', command: 'micVolumeDown' },
     'discord microphone gain sensitivity quieter',
   ),
+  preset(
+    'discord-output-volume-up',
+    'Output Volume Up',
+    { type: 'discord', command: 'outputVolumeUp' },
+    'discord speaker headphones listen louder',
+  ),
+  preset(
+    'discord-output-volume-down',
+    'Output Volume Down',
+    { type: 'discord', command: 'outputVolumeDown' },
+    'discord speaker headphones listen quieter',
+  ),
   // Same built-in apps as the "Application" tab's own quick-picks
   // (`app-launch-presets.ts`) — kept in one place, spread in here so they're
   // reachable from the top search box too, like every other preset.

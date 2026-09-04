@@ -143,6 +143,12 @@ export class ExecutionPipeline {
         case 'micVolumeDown':
           await discordRpcClient.adjustMicVolume(-1, action.step ?? 10);
           break;
+        case 'outputVolumeUp':
+          await discordRpcClient.adjustOutputVolume(1, action.step ?? 10);
+          break;
+        case 'outputVolumeDown':
+          await discordRpcClient.adjustOutputVolume(-1, action.step ?? 10);
+          break;
       }
     } catch (error) {
       // Never surfaced beyond the log — most likely cause is simply "Discord

@@ -117,10 +117,14 @@ export function describeAction(action: Action): ActionLabel {
       };
 
     case 'discord': {
-      // Only the two mic-volume commands carry a step — mute/deafen have
+      // Only the four volume commands carry a step — mute/deafen have
       // nothing to show one for, so a plain "Discord" secondary/no
       // qualifier there matches how `volume`'s mute case does the same.
-      const isVolumeCommand = action.command === 'micVolumeUp' || action.command === 'micVolumeDown';
+      const isVolumeCommand =
+        action.command === 'micVolumeUp' ||
+        action.command === 'micVolumeDown' ||
+        action.command === 'outputVolumeUp' ||
+        action.command === 'outputVolumeDown';
       const step = isVolumeCommand ? (action.step ?? 10) : null;
       return {
         primary: DISCORD_LABELS[action.command],

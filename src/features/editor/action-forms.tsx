@@ -242,7 +242,10 @@ export function ActionForm({ action, onChange }: FormProps) {
             ))}
           </TextField>
 
-          {(action.command === 'micVolumeUp' || action.command === 'micVolumeDown') && (
+          {(action.command === 'micVolumeUp' ||
+            action.command === 'micVolumeDown' ||
+            action.command === 'outputVolumeUp' ||
+            action.command === 'outputVolumeDown') && (
             <StepSlider
               label={`Step — ${action.step ?? 10}% per press`}
               value={action.step ?? 10}
